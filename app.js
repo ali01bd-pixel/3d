@@ -99,7 +99,7 @@
       <filter id="${id}_shadow" x="-50%" y="-50%" width="200%" height="200%">
         <feDropShadow dx="0" dy="${depth ? 16 : 7}" stdDeviation="${depth ? 14 : 8}" flood-color="#080715" flood-opacity="${depth ? .48 : .22}"/>
       </filter>
-      ${depth ? `<filter id="${id}_glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="18"/><feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.55 0"/></filter>` : ""}
+      <filter id="${id}_glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="${depth ? 18 : 12}"/></filter>
     </defs>`;
   }
 
@@ -301,6 +301,119 @@
     return out;
   }
 
+
+  function pastelEditorial(id,w,h,p,rnd,index){
+    // Five warm editorial compositions inspired by the supplied pastel/orange/pink reference.
+    const s = sizeFactor();
+    const C = {
+      bg: "#f1e2d0",
+      cream: "#f8ecd9",
+      peach: "#ffb266",
+      orange: "#ff7b35",
+      coral: "#ff5f6f",
+      pink: "#ee4a9c",
+      rose: "#d62c77",
+      yellow: "#ffd86b",
+      red: "#f23d52",
+      ink: "#4b2030"
+    };
+    const shadow = `url(#${id}_shadow)`;
+    const glow = `url(#${id}_glow)`;
+    let out = "";
+
+    // 01 — Rounded vertical descending/ascending droplet bars.
+    if(index % 5 === 0){
+      out += `<rect width="${w}" height="${h}" fill="${C.bg}"/>`;
+      const cols = Math.max(5, Math.floor(Number(state.density)/2)+2);
+      const gap = w/(cols+1);
+      for(let i=0;i<cols;i++){
+        const x = gap*(i+1);
+        const yy = h*(.18 + (i%2)*.10 + rnd()*.05);
+        const bh = h*(.18 + rnd()*.16)*s;
+        const bw = gap*(.52 + rnd()*.14);
+        const colors = [C.pink,C.peach,C.orange,C.yellow,C.coral];
+        const col = colors[(i+index)%colors.length];
+        out += `<rect x="${(x-bw/2).toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}"
+          rx="${(bw*.48).toFixed(1)}" fill="${col}" opacity=".95" filter="${shadow}"/>`;
+        out += `<ellipse cx="${x.toFixed(1)}" cy="${(yy+bh).toFixed(1)}" rx="${(bw*.48).toFixed(1)}" ry="${(bw*.46).toFixed(1)}" fill="${col}" opacity=".98"/>`;
+      }
+      out += `<ellipse cx="${w*.74}" cy="${h*.20}" rx="${w*.21}" ry="${h*.10}" fill="${C.yellow}" opacity=".18" filter="${glow}"/>`;
+      return out;
+    }
+
+    // 02 — Concentric spiral/ring spheres.
+    if(index % 5 === 1){
+      out += `<rect width="${w}" height="${h}" fill="${C.cream}"/>`;
+      const centers = [
+        [w*.27,h*.28,Math.min(w,h)*.15],
+        [w*.67,h*.27,Math.min(w,h)*.22],
+        [w*.40,h*.68,Math.min(w,h)*.19],
+        [w*.76,h*.68,Math.min(w,h)*.11]
+      ];
+      centers.forEach((c,ci)=>{
+        const [cx,cy,R]=c;
+        const rings = Math.max(6, Math.floor(Number(state.density)/2));
+        for(let j=0;j<rings;j++){
+          const r=R*(1-j/rings*.82);
+          const col=[C.pink,C.orange,C.yellow,C.coral,C.red][(j+ci)%5];
+          const yy = cy + Math.sin(j*.55+ci)*R*.035;
+          out += `<circle cx="${cx.toFixed(1)}" cy="${yy.toFixed(1)}" r="${r.toFixed(1)}" fill="none"
+            stroke="${col}" stroke-width="${Math.max(7,r*.18).toFixed(1)}" stroke-opacity="${(.28+.56*(1-j/rings)).toFixed(2)}"/>`;
+        }
+        out += `<circle cx="${(cx-R*.13).toFixed(1)}" cy="${(cy-R*.14).toFixed(1)}" r="${(R*.15).toFixed(1)}" fill="${C.yellow}" opacity=".42" filter="${glow}"/>`;
+      });
+      return out;
+    }
+
+    // 03 — Soft vertical warm gradient bars / modern cover.
+    if(index % 5 === 2){
+      out += `<rect width="${w}" height="${h}" fill="${C.bg}"/>`;
+      const bars = Math.max(9, Number(state.density)+4);
+      const bw = w/(bars*1.6);
+      for(let i=0;i<bars;i++){
+        const x=w*.13 + i*(w*.74/(bars-1));
+        const bh=h*(.26 + .045*i)*(0.82+rnd()*.30)*s;
+        const y=h*.77-bh;
+        const fill = i%4===0?C.yellow:(i%4===1?C.peach:(i%4===2?C.orange:C.coral));
+        out += `<rect x="${(x-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}"
+          fill="${fill}" opacity="${(.25+.58*(i/bars)).toFixed(2)}"/>`;
+      }
+      out += `<rect x="0" y="${(h*.62).toFixed(1)}" width="${w}" height="${(h*.38).toFixed(1)}" fill="${C.cream}" opacity=".28"/>`;
+      out += `<ellipse cx="${w*.51}" cy="${h*.66}" rx="${w*.22}" ry="${h*.13}" fill="${C.yellow}" opacity=".13" filter="${glow}"/>`;
+      return out;
+    }
+
+    // 04 — Giant nested rainbow arcs / semicircular cover.
+    if(index % 5 === 3){
+      out += `<rect width="${w}" height="${h}" fill="${C.bg}"/>`;
+      const cx=w*.49, cy=h*.36;
+      const rings=Math.max(7, Math.floor(Number(state.density)/2)+4);
+      for(let i=0;i<rings;i++){
+        const R=Math.min(w,h)*(.33+i*.055)*s;
+        const col=[C.coral,C.orange,C.peach,C.yellow,C.pink,C.red][i%6];
+        out += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${R.toFixed(1)}" fill="none"
+          stroke="${col}" stroke-width="${Math.max(18,R*.13).toFixed(1)}" stroke-opacity="${(.26+.62*(1-i/rings)).toFixed(2)}"/>`;
+      }
+      out += `<rect x="${(w*.18).toFixed(1)}" y="${(h*.33).toFixed(1)}" width="${(w*.64).toFixed(1)}" height="${(h*.22).toFixed(1)}" fill="${C.cream}" opacity=".90"/>`;
+      out += `<text x="${(w*.50).toFixed(1)}" y="${(h*.455).toFixed(1)}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${Math.round(Math.min(w,h)*.060)}" font-weight="800" fill="${C.ink}">COVER</text>`;
+      out += `<text x="${(w*.50).toFixed(1)}" y="${(h*.495).toFixed(1)}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${Math.round(Math.min(w,h)*.060)}" font-weight="800" fill="${C.ink}">DESIGN</text>`;
+      return out;
+    }
+
+    // 05 — Diagonal stripe field.
+    out += `<rect width="${w}" height="${h}" fill="${C.red}"/>`;
+    const stripes=Math.max(16, Math.floor(Number(state.density)*2.2));
+    const stripeH=h*.036;
+    for(let i=-3;i<stripes+3;i++){
+      const y=i*(h/(stripes));
+      const col=[C.pink,C.orange,C.yellow,C.coral,C.rose][i%5];
+      const slant=w*.16;
+      out += `<path d="M ${(w*.02-slant).toFixed(1)} ${(y+stripeH).toFixed(1)} L ${(w*.02).toFixed(1)} ${y.toFixed(1)} L ${(w*.98).toFixed(1)} ${(y.toFixed(1))} L ${(w*.98+slant).toFixed(1)} ${(y+stripeH).toFixed(1)} Z" fill="${col}" opacity=".96"/>`;
+    }
+    out += `<rect x="${(w*.10).toFixed(1)}" y="${(h*.73).toFixed(1)}" width="${(w*.80).toFixed(1)}" height="${(h*.13).toFixed(1)}" rx="${(h*.03).toFixed(1)}" fill="${C.cream}" opacity=".92"/>`;
+    return out;
+  }
+
   function layoutByMode(index,w,h,p,rnd,id){
     const mode = state.designMode;
     if(mode === "liquid") return liquid(id,w,h,p,rnd);
@@ -310,6 +423,7 @@
     if(mode === "waves") return waves(id,w,h,p,rnd);
     if(mode === "minimal") return minimal(id,w,h,p,rnd);
     if(mode === "blueEditorial") return referenceEditorial(id,w,h,p,rnd,index);
+    if(mode === "pastelEditorial") return pastelEditorial(id,w,h,p,rnd,index);
     const options=[circleGrid,ribbonBars,spheres,prisms,petals,waves,liquid,minimal];
     const fn=options[index%options.length];
     return fn(id,w,h,p,rnd);
@@ -318,10 +432,10 @@
   function textLayer(id,index,w,h,p){
     const amount=Number(state.textAmount)/100;
     if(amount<=0) return "";
-    const titles = state.designMode === "blueEditorial" ? ["DESIGN INSPIRATION","ABSTRACT POSTER","ABSTRACT / 01","INSPIRATION","CREATE","BLUE FORM","VISUAL STUDY","MODERN ART"] : ["VIVID MOTION","COLOR / FORM","SOFT IMPACT","NEW DIMENSION","VISUAL ENERGY","LIQUID SYSTEM","LIGHT / VOLUME","MODERN OBJECT"];
+    const titles = state.designMode === "blueEditorial" ? ["DESIGN INSPIRATION","ABSTRACT POSTER","ABSTRACT / 01","INSPIRATION","CREATE","BLUE FORM","VISUAL STUDY","MODERN ART"] : state.designMode === "pastelEditorial" ? ["DESIGN INSPIRATION","INSPIRATION","MODERN COVER","COVER DESIGN","MODERN ART","COLOR STUDY","DESIGN POSTER","SOFT FORM"] : ["VIVID MOTION","COLOR / FORM","SOFT IMPACT","NEW DIMENSION","VISUAL ENERGY","LIQUID SYSTEM","LIGHT / VOLUME","MODERN OBJECT"];
     const title=titles[index%titles.length];
     const fs=Math.max(18,Math.round(Math.min(w,h)*.026));
-    const sub = state.designMode === "blueEditorial" ? ["DESIGN STUDY","POSTER SYSTEM","BLUE EDITORIAL","VISUAL REFERENCE","FORM / VOLUME"][index%5] : ["ABSTRACT SERIES","GENERATIVE STUDY","EDITED IN SVG","DESIGN OBJECT","COLOR EXPLORATION"][index%5];
+    const sub = state.designMode === "blueEditorial" ? ["DESIGN STUDY","POSTER SYSTEM","BLUE EDITORIAL","VISUAL REFERENCE","FORM / VOLUME"][index%5] : state.designMode === "pastelEditorial" ? ["DESIGN STUDY","POSTER SERIES","MODERN COVER","VISUAL SYSTEM","COLOR / FORM"][index%5] : ["ABSTRACT SERIES","GENERATIVE STUDY","EDITED IN SVG","DESIGN OBJECT","COLOR EXPLORATION"][index%5];
     const fill=index%4===1?"#081019":"#ffffff";
     return `<g font-family="Arial, Helvetica, sans-serif" fill="${fill}" opacity="${(.68+.28*amount).toFixed(2)}">
       <text x="${(w*.08).toFixed(1)}" y="${(h*.10).toFixed(1)}" font-size="${fs}" font-weight="800" letter-spacing="${Math.max(2,fs*.18).toFixed(1)}">${esc(title)}</text>
@@ -434,7 +548,7 @@
     $("spacing").value=10+Math.floor(Math.random()*51);
     $("edgeFade").value=12+Math.floor(Math.random()*65);
     const themes=Object.keys(THEMES); $("theme").value=themes[Math.floor(Math.random()*themes.length)];
-    const modes=["vibrantMix","blueEditorial","liquid","glass","prism","organic","waves","minimal"]; $("designMode").value=modes[Math.floor(Math.random()*modes.length)];
+    const modes=["vibrantMix","blueEditorial","pastelEditorial","liquid","glass","prism","organic","waves","minimal"]; $("designMode").value=modes[Math.floor(Math.random()*modes.length)];
     updateOutputs(); render();
   });
 

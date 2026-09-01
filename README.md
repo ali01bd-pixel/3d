@@ -41,3 +41,15 @@ A new `Blue Editorial Reference` design family is included. It rotates through f
 5. Nested ribbon arcs
 
 The layouts are seeded so each generated poster remains repeatable while still varying position, scale and spacing. The existing Flat / 3D Depth control continues to work with this family.
+
+
+## Pastel Editorial Reference Mode
+
+A new `Pastel Editorial Reference` family is included, rotating through:
+- rounded warm droplet bars
+- concentric coral/orange/pink rings
+- soft vertical gradient bars
+- nested semicircular rainbow arcs
+- diagonal multi-color stripes
+
+It is designed to produce warm cream, coral, orange, pink and yellow editorial posters with varied compositions. The existing Flat / 3D Depth switch remains available.
