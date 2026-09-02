@@ -517,6 +517,121 @@
     return out;
   }
 
+
+  function cyanGeometric(id,w,h,p,rnd,index){
+    // Cyan/sky-blue geometric editorial family inspired by the supplied reference.
+    const s=sizeFactor();
+    const C={
+      navy:"#07151d",
+      blue:"#299dcc",
+      cyan:"#55cbea",
+      ice:"#dff6f4",
+      white:"#f6ffff",
+      violet:"#8f83cf",
+      lilac:"#c9b6d6",
+      orange:"#ef6f1b",
+      yellow:"#ffd452",
+      peach:"#f5bd96",
+      deep:"#124b72"
+    };
+    const shadow=`url(#${id}_shadow)`;
+    const glow=`url(#${id}_glow)`;
+    let out="";
+
+    // 01 — Modular translucent blocks.
+    if(index%5===0){
+      out+=`<rect width="${w}" height="${h}" fill="${C.ice}"/>`;
+      const cols=6, rows=9;
+      const cw=w/cols, rh=h/rows;
+      for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+          if((r+c+index)%3===0){
+            const x=c*cw + cw*.04, y=r*rh + rh*.03;
+            const ww=cw*(.82+rnd()*.12), hh=rh*(.72+rnd()*.20);
+            const palette=[C.cyan,C.blue,C.violet,C.lilac,C.white,C.yellow];
+            const fill=palette[(r*cols+c+index)%palette.length];
+            out+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${ww.toFixed(1)}" height="${hh.toFixed(1)}"
+              fill="${fill}" opacity="${(.36+.46*rnd()).toFixed(2)}"/>`;
+          }
+        }
+      }
+      out+=`<rect x="${(w*.14).toFixed(1)}" y="${(h*.12).toFixed(1)}" width="${(w*.16).toFixed(1)}" height="${(h*.20).toFixed(1)}" fill="${C.yellow}" opacity=".92"/>`;
+      out+=`<rect x="${(w*.15).toFixed(1)}" y="${(h*.24).toFixed(1)}" width="${(w*.13).toFixed(1)}" height="${(h*.17).toFixed(1)}" fill="${C.orange}" opacity=".90"/>`;
+      out+=`<rect x="${(w*.61).toFixed(1)}" y="${(h*.67).toFixed(1)}" width="${(w*.26).toFixed(1)}" height="${(h*.18).toFixed(1)}" fill="${C.orange}" opacity=".88"/>`;
+      out+=`<ellipse cx="${w*.52}" cy="${h*.46}" rx="${w*.28}" ry="${h*.22}" fill="${C.white}" opacity=".14" filter="${glow}"/>`;
+      return out;
+    }
+
+    // 02 — Tall vertical translucent prism columns.
+    if(index%5===1){
+      out+=`<rect width="${w}" height="${h}" fill="${C.ice}"/>`;
+      const bars=7+Math.floor(Number(state.density)/3);
+      for(let i=0;i<bars;i++){
+        const x=w*(.06+i*.115)+(rnd()-.5)*w*.02;
+        const bw=w*(.12+rnd()*.06);
+        const top=h*(.03+rnd()*.08);
+        const bottom=h*(.92-rnd()*.06);
+        const col=[C.white,C.lilac,C.violet,C.cyan,C.blue,C.deep][i%6];
+        out+=`<polygon points="${x.toFixed(1)},${top.toFixed(1)} ${(x+bw).toFixed(1)},${(top+rhSafe(h)).toFixed(1)} ${(x+bw).toFixed(1)},${bottom.toFixed(1)} ${(x-bw*.05).toFixed(1)},${(bottom-h*.06).toFixed(1)} ${(x-bw*.02).toFixed(1)},${top.toFixed(1)}" fill="${col}" opacity="${(.44+.34*(i%3)/2).toFixed(2)}"/>`;
+      }
+      out+=`<path d="M ${w*.02} ${h*.18} L ${w*.98} ${h*.07} L ${w*.98} ${h*.34} L ${w*.02} ${h*.45} Z" fill="${C.cyan}" opacity=".10"/>`;
+      out+=`<ellipse cx="${w*.55}" cy="${h*.42}" rx="${w*.22}" ry="${h*.32}" fill="${C.white}" opacity=".10" filter="${glow}"/>`;
+      return out;
+    }
+
+    // 03 — Faceted radial abstract polygon.
+    if(index%5===2){
+      out+=`<rect width="${w}" height="${h}" fill="${C.ice}"/>`;
+      const cx=w*(.49+rnd()*.05), cy=h*(.49+rnd()*.05);
+      const R=Math.max(w,h)*.50;
+      const n=9;
+      const palette=[C.orange,C.yellow,C.cyan,C.white,C.violet,C.blue,C.peach];
+      const angles=[];
+      for(let i=0;i<=n;i++) angles.push(-Math.PI*.72 + i*(Math.PI*1.45/n));
+      for(let i=0;i<n;i++){
+        const a0=angles[i], a1=angles[i+1];
+        const x0=cx+Math.cos(a0)*R, y0=cy+Math.sin(a0)*R;
+        const x1=cx+Math.cos(a1)*R, y1=cy+Math.sin(a1)*R;
+        const col=palette[(i+index)%palette.length];
+        out+=`<polygon points="${cx.toFixed(1)},${cy.toFixed(1)} ${x0.toFixed(1)},${y0.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}" fill="${col}" opacity="${(.60+.34*rnd()).toFixed(2)}"/>`;
+      }
+      out+=`<polygon points="${(cx-w*.09).toFixed(1)},${(cy-h*.19).toFixed(1)} ${ (cx+w*.08).toFixed(1)},${(cy-h*.27).toFixed(1)} ${ (cx+w*.20).toFixed(1)},${(cy+h*.10).toFixed(1)} ${ (cx-w*.08).toFixed(1)},${(cy+h*.22).toFixed(1)}" fill="${C.white}" opacity=".92"/>`;
+      out+=`<ellipse cx="${cx}" cy="${cy}" rx="${w*.15}" ry="${h*.08}" fill="${C.white}" opacity=".12" filter="${glow}"/>`;
+      return out;
+    }
+
+    // 04 — Curved layered gradient ribbons.
+    if(index%5===3){
+      out+=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)" opacity=".86"/>`;
+      const bands=7+Math.floor(Number(state.density)/2);
+      for(let i=0;i<bands;i++){
+        const yy=h*(.18+i*.105);
+        const amp=h*(.08+i*.006);
+        const col=[C.orange,C.peach,C.yellow,C.cyan,C.blue,C.violet][i%6];
+        out+=`<path d="M ${-w*.08} ${yy.toFixed(1)} C ${w*.25} ${(yy-amp).toFixed(1)}, ${w*.62} ${(yy+amp).toFixed(1)}, ${w*1.08} ${(yy-amp*.38).toFixed(1)} L ${w*1.08} ${(yy+amp*.30).toFixed(1)} C ${w*.62} ${(yy+amp*1.28).toFixed(1)}, ${w*.25} ${(yy+amp*.18).toFixed(1)}, ${-w*.08} ${(yy+amp*.48).toFixed(1)} Z" fill="${col}" opacity="${(.33+.07*(i%4)).toFixed(2)}"/>`;
+      }
+      out+=`<ellipse cx="${w*.64}" cy="${h*.38}" rx="${w*.30}" ry="${h*.18}" fill="${C.yellow}" opacity=".08" filter="${glow}"/>`;
+      return out;
+    }
+
+    // 05 — Nested semicircular warm/cool gradient arches.
+    out+=`<rect width="${w}" height="${h}" fill="${C.ice}"/>`;
+    const cx=w*.50, base=h*.72;
+    const arches=6+Math.floor(Number(state.density)/2);
+    for(let i=0;i<arches;i++){
+      const rw=w*(.46+i*.055)*s;
+      const rh=h*(.16+i*.045)*s;
+      const col=i%2===0?C.orange:C.yellow;
+      out+=`<path d="M ${(cx-rw).toFixed(1)} ${base.toFixed(1)} Q ${cx.toFixed(1)} ${(base-rh*1.95).toFixed(1)} ${(cx+rw).toFixed(1)} ${base.toFixed(1)}" fill="none"
+        stroke="${col}" stroke-width="${Math.max(18,h*.028).toFixed(1)}" stroke-opacity="${(.30+.52*(1-i/arches)).toFixed(2)}" stroke-linecap="round"/>`;
+    }
+    out+=`<path d="M 0 ${h*.30} C ${w*.20} ${h*.12}, ${w*.55} ${h*.08}, ${w} ${h*.28}" fill="none" stroke="${C.cyan}" stroke-width="${Math.max(28,h*.045)}" stroke-opacity=".42"/>`;
+    out+=`<ellipse cx="${w*.50}" cy="${h*.68}" rx="${w*.28}" ry="${h*.10}" fill="${C.white}" opacity=".12" filter="${glow}"/>`;
+    return out;
+  }
+
+  function rhSafe(h){ return h*.20; }
+
   function layoutByMode(index,w,h,p,rnd,id){
     const mode = state.designMode;
     if(mode === "liquid") return liquid(id,w,h,p,rnd);
@@ -528,6 +643,7 @@
     if(mode === "blueEditorial") return referenceEditorial(id,w,h,p,rnd,index);
     if(mode === "pastelEditorial") return pastelEditorial(id,w,h,p,rnd,index);
     if(mode === "redEditorial") return redEditorial(id,w,h,p,rnd,index);
+    if(mode === "cyanGeometric") return cyanGeometric(id,w,h,p,rnd,index);
     const options=[circleGrid,ribbonBars,spheres,prisms,petals,waves,liquid,minimal];
     const fn=options[index%options.length];
     return fn(id,w,h,p,rnd);
@@ -536,10 +652,10 @@
   function textLayer(id,index,w,h,p){
     const amount=Number(state.textAmount)/100;
     if(amount<=0) return "";
-    const titles = state.designMode === "blueEditorial" ? ["DESIGN INSPIRATION","ABSTRACT POSTER","ABSTRACT / 01","INSPIRATION","CREATE","BLUE FORM","VISUAL STUDY","MODERN ART"] : state.designMode === "pastelEditorial" ? ["DESIGN INSPIRATION","INSPIRATION","MODERN COVER","COVER DESIGN","MODERN ART","COLOR STUDY","DESIGN POSTER","SOFT FORM"] : state.designMode === "redEditorial" ? ["DESIGN","RED FORM","DESIGN","INSPIRATION","MODERN ART","ABSTRACT","FORM / MOTION","VISUAL DESIGN"] : ["VIVID MOTION","COLOR / FORM","SOFT IMPACT","NEW DIMENSION","VISUAL ENERGY","LIQUID SYSTEM","LIGHT / VOLUME","MODERN OBJECT"];
+    const titles = state.designMode === "blueEditorial" ? ["DESIGN INSPIRATION","ABSTRACT POSTER","ABSTRACT / 01","INSPIRATION","CREATE","BLUE FORM","VISUAL STUDY","MODERN ART"] : state.designMode === "pastelEditorial" ? ["DESIGN INSPIRATION","INSPIRATION","MODERN COVER","COVER DESIGN","MODERN ART","COLOR STUDY","DESIGN POSTER","SOFT FORM"] : state.designMode === "redEditorial" ? ["DESIGN","RED FORM","DESIGN","INSPIRATION","MODERN ART","ABSTRACT","FORM / MOTION","VISUAL DESIGN"] : state.designMode === "cyanGeometric" ? ["GRADIENT DESIGN","GEOMETRIC","ABSTRACT","GRADIENT","MODERN COVER","COLOR FORM","PRISM","VISUAL STUDY"] : ["VIVID MOTION","COLOR / FORM","SOFT IMPACT","NEW DIMENSION","VISUAL ENERGY","LIQUID SYSTEM","LIGHT / VOLUME","MODERN OBJECT"];
     const title=titles[index%titles.length];
     const fs=Math.max(18,Math.round(Math.min(w,h)*.026));
-    const sub = state.designMode === "blueEditorial" ? ["DESIGN STUDY","POSTER SYSTEM","BLUE EDITORIAL","VISUAL REFERENCE","FORM / VOLUME"][index%5] : state.designMode === "pastelEditorial" ? ["DESIGN STUDY","POSTER SERIES","MODERN COVER","VISUAL SYSTEM","COLOR / FORM"][index%5] : state.designMode === "redEditorial" ? ["EDITORIAL STUDY","RED SYSTEM","DESIGN SERIES","FORM / CONTRAST","VISUAL STUDY"][index%5] : ["ABSTRACT SERIES","GENERATIVE STUDY","EDITED IN SVG","DESIGN OBJECT","COLOR EXPLORATION"][index%5];
+    const sub = state.designMode === "blueEditorial" ? ["DESIGN STUDY","POSTER SYSTEM","BLUE EDITORIAL","VISUAL REFERENCE","FORM / VOLUME"][index%5] : state.designMode === "pastelEditorial" ? ["DESIGN STUDY","POSTER SERIES","MODERN COVER","VISUAL SYSTEM","COLOR / FORM"][index%5] : state.designMode === "redEditorial" ? ["EDITORIAL STUDY","RED SYSTEM","DESIGN SERIES","FORM / CONTRAST","VISUAL STUDY"][index%5] : state.designMode === "cyanGeometric" ? ["COLOR SYSTEM","GEOMETRIC STUDY","EDITORIAL POSTER","GRADIENT SERIES","MODERN FORM"][index%5] : ["ABSTRACT SERIES","GENERATIVE STUDY","EDITED IN SVG","DESIGN OBJECT","COLOR EXPLORATION"][index%5];
     const fill=index%4===1?"#081019":"#ffffff";
     return `<g font-family="Arial, Helvetica, sans-serif" fill="${fill}" opacity="${(.68+.28*amount).toFixed(2)}">
       <text x="${(w*.08).toFixed(1)}" y="${(h*.10).toFixed(1)}" font-size="${fs}" font-weight="800" letter-spacing="${Math.max(2,fs*.18).toFixed(1)}">${esc(title)}</text>
@@ -652,7 +768,7 @@
     $("spacing").value=10+Math.floor(Math.random()*51);
     $("edgeFade").value=12+Math.floor(Math.random()*65);
     const themes=Object.keys(THEMES); $("theme").value=themes[Math.floor(Math.random()*themes.length)];
-    const modes=["vibrantMix","blueEditorial","pastelEditorial","redEditorial","liquid","glass","prism","organic","waves","minimal"]; $("designMode").value=modes[Math.floor(Math.random()*modes.length)];
+    const modes=["vibrantMix","blueEditorial","pastelEditorial","redEditorial","cyanGeometric","liquid","glass","prism","organic","waves","minimal"]; $("designMode").value=modes[Math.floor(Math.random()*modes.length)];
     updateOutputs(); render();
   });
 

@@ -65,3 +65,15 @@ A new `Red & Black Editorial Reference` family is included:
 - dramatic cream/red starburst
 
 This family is designed to produce high-contrast editorial poster variations inspired by the supplied reference image and remains compatible with Flat / 3D Depth rendering.
+
+
+## Cyan Geometric Editorial Reference Mode
+
+A new `Cyan Geometric Editorial Reference` family is included:
+- modular translucent blocks
+- tall vertical prism columns
+- faceted radial geometry
+- layered gradient ribbons
+- nested semicircular orange/yellow arches
+
+The palette combines cyan, sky blue, violet, pale cream and warm orange/yellow accents to match the supplied reference style while generating seeded variations.
