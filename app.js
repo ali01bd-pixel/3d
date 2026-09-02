@@ -632,6 +632,116 @@
 
   function rhSafe(h){ return h*.20; }
 
+
+  function hashString(str){ let h=2166136261; for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);} return h>>>0; }
+
+  function catalogPalette(mode,index){
+    const keys=Object.keys(THEMES), h=hashString(mode+":"+(Number(state.seed)||1)+":"+index);
+    const t1=THEMES[keys[h%keys.length]], t2=THEMES[keys[(h>>>8)%keys.length]];
+    const warm=/pastel|retro|vintage|memphis|playful|fashion|floral|botanical|tropical|luxury|ornament|art deco|art nouveau|moroccan|islamic/i.test(mode);
+    const dark=/luxury|bold|modern|abstract|experimental|synthwave|vaporwave|cyber|ink|stone|marble|tech|futuristic/i.test(mode);
+    const bias=warm?.24:dark?.42:.18;
+    return {dark:mixHex(t1.dark,t2.dark,bias),mid:mixHex(t1.mid,t2.mid,.28),a:mixHex(t1.a,t2.a,.35),b:mixHex(t1.b,t2.b,.30),light:mixHex(t1.light,t2.light,.20),text:dark?"#ffffff":(warm?"#44252c":"#ffffff")};
+  }
+
+  function catalogArchetype(mode){
+    const low=mode.toLowerCase();
+    if(/bubble/.test(low)) return "rings";
+    if(/blobs|liquid|marble|fluid|ink|paint|organic|biomorphic|dreamy|natural/.test(low)) return "blobs";
+    if(/petal|floral|botanical|leaf|tropical|nature/.test(low)) return "petals";
+    if(/mandala|sacred|kaleidoscope|radial|circular|concentric|ornamental|decorative|symmetrical/.test(low)) return "radial";
+    if(/halftone|dot|polka|grid|checker|pattern|line pattern|wave pattern|spiral|seamless/.test(low)) return "pattern";
+    if(/geometry|geometric|prism|layers|collage|shapes|color block|art deco|moroccan|islamic|memphis|y2k|tech|futuristic/.test(low)) return "geometry";
+    if(/wave|gradient|vaporwave|synthwave|cyber/.test(low)) return "waves";
+    if(/soft|minimal/.test(low)) return "minimal";
+    return "abstract";
+  }
+
+  function catalogDesign(id,w,h,p,rnd,index,mode){
+    const s=sizeFactor(), min=Math.min(w,h), deep=state.depth==="3d";
+    const shadow=`url(#${id}_shadow)`, glow=`url(#${id}_glow)`;
+    const A=p.a,B=p.b,L=p.light,D=p.dark,M=p.mid;
+    const type=catalogArchetype(mode);
+    let out=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)"/>`;
+    const k=hashString(mode+index);
+
+    if(type==="rings"){
+      out=`<rect width="${w}" height="${h}" fill="${L}"/>`;
+      const count=3+(k%3);
+      for(let n=0;n<count;n++){
+        const cx=w*(.17+((k>>(n%8))%70)/100), cy=h*(.18+((k>>(n%6))%65)/100), R=min*(.08+((k>>(n+3)%10)%13)/100)*s;
+        for(let j=0;j<9;j++){
+          const rr=R*(1-j*.085), c=[A,B,M,L][(j+n)%4];
+          out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rr.toFixed(1)}" fill="none" stroke="${c}" stroke-width="${Math.max(6,rr*.14).toFixed(1)}" opacity="${(.28+.62*(1-j/9)).toFixed(2)}"/>`;
+        }
+      }
+    } else if(type==="blobs"){
+      const count=5+(k%5); out+=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)"/>`;
+      for(let i=0;i<count;i++){
+        const x=w*(.10+rnd()*.80), y=h*(.10+rnd()*.78), rx=w*(.08+rnd()*.19)*s, ry=h*(.05+rnd()*.14)*s;
+        const d=`M ${x-rx} ${y} C ${x-rx*.78} ${y-ry*1.15}, ${x-rx*.10} ${y-ry*.84}, ${x+rx} ${y-ry*.08} C ${x+rx*.72} ${y+ry*1.1}, ${x-rx*.05} ${y+ry*.92}, ${x-rx} ${y} Z`;
+        out+=`<path d="${d}" fill="${i%2?`url(#${id}_hero)`:A}" opacity=".88" filter="${shadow}"/>`;
+        if(deep) out+=`<ellipse cx="${(x-rx*.25).toFixed(1)}" cy="${(y-ry*.25).toFixed(1)}" rx="${(rx*.24).toFixed(1)}" ry="${(ry*.18).toFixed(1)}" fill="#fff" opacity=".30" filter="${glow}"/>`;
+      }
+    } else if(type==="petals"){
+      out=`<rect width="${w}" height="${h}" fill="${L}"/>`;
+      const cx=w*(.50+(rnd()-.5)*.10), cy=h*(.50+(rnd()-.5)*.10), R=min*.26*s, n=6+(k%5);
+      for(let i=0;i<n;i++){
+        const ang=i*TAU/n, x=cx+Math.cos(ang)*R*.56, y=cy+Math.sin(ang)*R*.56, rx=R*(.58+rnd()*.20), ry=R*(.18+rnd()*.10), c=i%2?A:B;
+        out+=`<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" transform="rotate(${(ang*180/Math.PI).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="${c}" opacity=".80" filter="${shadow}"/>`;
+      }
+      out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(R*.34).toFixed(1)}" fill="${L}" opacity=".94" filter="${glow}"/>`;
+    } else if(type==="radial"){
+      out=`<rect width="${w}" height="${h}" fill="${D}"/>`;
+      const cx=w*(.45+rnd()*.10),cy=h*(.42+rnd()*.18),n=12+(k%10),R=Math.max(w,h)*1.25,pal=[A,B,M,L];
+      for(let i=0;i<n;i++){
+        const a0=-Math.PI*.9+TAU*i/n,a1=a0+TAU/n*.88,c=pal[i%pal.length];
+        out+=`<path d="M ${cx.toFixed(1)} ${cy.toFixed(1)} L ${(cx+Math.cos(a0)*R).toFixed(1)} ${(cy+Math.sin(a0)*R).toFixed(1)} L ${(cx+Math.cos(a1)*R).toFixed(1)} ${(cy+Math.sin(a1)*R).toFixed(1)} Z" fill="${c}" opacity="${(.30+.48*(i%3===0)).toFixed(2)}"/>`;
+      }
+      out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(min*.05*s).toFixed(1)}" fill="${L}" opacity=".85" filter="${glow}"/>`;
+    } else if(type==="pattern"){
+      out=`<rect width="${w}" height="${h}" fill="${D}"/>`;
+      const n=9+(k%5), gap=w/n, rh=h/n, pal=[A,B,M,L];
+      for(let r=0;r<n;r++) for(let c=0;c<n;c++){
+        const choose=(r+c+(k%5))%3!==0; if(!choose) continue;
+        const x=c*gap,y=r*rh; const fill=pal[(r*3+c+k)%pal.length];
+        out+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(gap*.84).toFixed(1)}" height="${(rh*.84).toFixed(1)}" rx="${Math.min(24,rh*.12).toFixed(1)}" fill="${fill}" opacity="${(.22+.68*((r+c)%5)/4).toFixed(2)}"/>`;
+      }
+      if(/line|wave|spiral/.test(mode.toLowerCase())){
+        for(let i=0;i<7;i++){ const y=h*(.12+i*.12); out+=`<path d="M 0 ${y.toFixed(1)} Q ${(w*.5).toFixed(1)} ${(y-h*.05).toFixed(1)} ${w.toFixed(1)} ${(y+h*.025).toFixed(1)}" fill="none" stroke="${i%2?L:A}" stroke-width="${Math.max(2,min*.0025)}" opacity=".52"/>`; }
+      }
+    } else if(type==="geometry"){
+      out=`<rect width="${w}" height="${h}" fill="${D}"/>`;
+      const count=8+(k%8), pal=[A,B,M,L];
+      for(let i=0;i<count;i++){
+        const cx=w*(.08+rnd()*.82),cy=h*(.08+rnd()*.82),rw=min*(.05+rnd()*.13)*s,rh=rw*(.55+rnd()*.95),rot=(rnd()-.5)*50, c=pal[i%pal.length];
+        const pts=`${(-rw).toFixed(1)},0 ${(rw*.75).toFixed(1)},${(-rh).toFixed(1)} ${(rw).toFixed(1)},0 ${(rw*.28).toFixed(1)},${rh.toFixed(1)} ${(-rw*.68).toFixed(1)},${(rh*.58).toFixed(1)}`;
+        out+=`<polygon points="${pts}" transform="translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${rot.toFixed(1)})" fill="${c}" opacity="${(.48+rnd()*.42).toFixed(2)}" filter="${shadow}"/>`;
+      }
+    } else if(type==="waves"){
+      out=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)"/>`;
+      const lines=7+(k%7); for(let j=0;j<lines;j++){
+        const y=h*(.10+j*.12), amp=h*(.025+.02*rnd()), pts=[];
+        for(let i=0;i<=22;i++){const x=w*i/22, yy=y+Math.sin(i*.48+j*.7+k*.001)*amp*(.8+rnd());pts.push(`${x.toFixed(1)},${yy.toFixed(1)}`)}
+        out+=`<polyline points="${pts.join(' ')}" fill="none" stroke="${j%2?B:L}" stroke-width="${Math.max(5,min*.007)}" opacity="${(.36+j*.045).toFixed(2)}"/>`;
+      }
+    } else if(type==="minimal"){
+      out=`<rect width="${w}" height="${h}" fill="${L}"/>`;
+      const n=3+(k%4); for(let i=0;i<n;i++){
+        const x=w*(.15+rnd()*.55), y=h*(.17+rnd()*.62), ww=w*(.16+rnd()*.30)*s, hh=h*(.07+rnd()*.16)*s, c=i%2?A:B;
+        out+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${ww.toFixed(1)}" height="${hh.toFixed(1)}" rx="${Math.min(60,hh*.35).toFixed(1)}" transform="rotate(${((rnd()-.5)*22).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="${c}" opacity=".82" filter="${shadow}"/>`;
+      }
+    } else { // abstract
+      out=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)"/>`;
+      const n=10+(k%8); for(let i=0;i<n;i++){
+        const cx=w*(.06+rnd()*.88),cy=h*(.06+rnd()*.88),r=min*(.025+rnd()*.11)*s,c=i%2?A:B;
+        out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" opacity="${(.25+.55*rnd()).toFixed(2)}" filter="${shadow}"/>`;
+      }
+      out+=`<path d="M 0 ${h*.72} C ${w*.22} ${h*.44}, ${w*.60} ${h*.94}, ${w} ${h*.20}" fill="none" stroke="${L}" stroke-opacity=".34" stroke-width="${Math.max(20,min*.028)}" filter="${glow}"/>`;
+    }
+    return out;
+  }
+
   function layoutByMode(index,w,h,p,rnd,id){
     const mode = state.designMode;
     if(mode === "liquid") return liquid(id,w,h,p,rnd);
@@ -644,6 +754,7 @@
     if(mode === "pastelEditorial") return pastelEditorial(id,w,h,p,rnd,index);
     if(mode === "redEditorial") return redEditorial(id,w,h,p,rnd,index);
     if(mode === "cyanGeometric") return cyanGeometric(id,w,h,p,rnd,index);
+    if(mode.startsWith("catalog_")){ const label=document.querySelector(`#designMode option[value="${mode}"]`)?.textContent || mode; return catalogDesign(id,w,h,catalogPalette(label,index),rnd,index,label); }
     const options=[circleGrid,ribbonBars,spheres,prisms,petals,waves,liquid,minimal];
     const fn=options[index%options.length];
     return fn(id,w,h,p,rnd);
@@ -652,11 +763,10 @@
   function textLayer(id,index,w,h,p){
     const amount=Number(state.textAmount)/100;
     if(amount<=0) return "";
-    const titles = state.designMode === "blueEditorial" ? ["DESIGN INSPIRATION","ABSTRACT POSTER","ABSTRACT / 01","INSPIRATION","CREATE","BLUE FORM","VISUAL STUDY","MODERN ART"] : state.designMode === "pastelEditorial" ? ["DESIGN INSPIRATION","INSPIRATION","MODERN COVER","COVER DESIGN","MODERN ART","COLOR STUDY","DESIGN POSTER","SOFT FORM"] : state.designMode === "redEditorial" ? ["DESIGN","RED FORM","DESIGN","INSPIRATION","MODERN ART","ABSTRACT","FORM / MOTION","VISUAL DESIGN"] : state.designMode === "cyanGeometric" ? ["GRADIENT DESIGN","GEOMETRIC","ABSTRACT","GRADIENT","MODERN COVER","COLOR FORM","PRISM","VISUAL STUDY"] : ["VIVID MOTION","COLOR / FORM","SOFT IMPACT","NEW DIMENSION","VISUAL ENERGY","LIQUID SYSTEM","LIGHT / VOLUME","MODERN OBJECT"];
-    const title=titles[index%titles.length];
+    const catalogLabel = state.designMode.startsWith("catalog_") ? (document.querySelector(`#designMode option[value="${state.designMode}"]`)?.textContent || "ABSTRACT") : "";
+    const titles = catalogLabel ? [catalogLabel.toUpperCase()] : state.designMode === "blueEditorial" ? ["DESIGN INSPIRATION","ABSTRACT POSTER","ABSTRACT / 01","INSPIRATION","CREATE","BLUE FORM","VISUAL STUDY","MODERN ART"] : state.designMode === "pastelEditorial" ? ["DESIGN INSPIRATION","INSPIRATION","MODERN COVER","COVER DESIGN","MODERN ART","COLOR STUDY","DESIGN POSTER","SOFT FORM"] : state.designMode === "redEditorial" ? ["DESIGN","RED FORM","DESIGN","INSPIRATION","MODERN ART","ABSTRACT","FORM / MOTION","VISUAL DESIGN"] : state.designMode === "cyanGeometric" ? ["GRADIENT DESIGN","GEOMETRIC","ABSTRACT","GRADIENT","MODERN COVER","COLOR FORM","PRISM","VISUAL STUDY"] : ["VIVID MOTION","COLOR / FORM","SOFT IMPACT","NEW DIMENSION","VISUAL ENERGY","LIQUID SYSTEM","LIGHT / VOLUME","MODERN OBJECT"];    const title=titles[index%titles.length];
     const fs=Math.max(18,Math.round(Math.min(w,h)*.026));
-    const sub = state.designMode === "blueEditorial" ? ["DESIGN STUDY","POSTER SYSTEM","BLUE EDITORIAL","VISUAL REFERENCE","FORM / VOLUME"][index%5] : state.designMode === "pastelEditorial" ? ["DESIGN STUDY","POSTER SERIES","MODERN COVER","VISUAL SYSTEM","COLOR / FORM"][index%5] : state.designMode === "redEditorial" ? ["EDITORIAL STUDY","RED SYSTEM","DESIGN SERIES","FORM / CONTRAST","VISUAL STUDY"][index%5] : state.designMode === "cyanGeometric" ? ["COLOR SYSTEM","GEOMETRIC STUDY","EDITORIAL POSTER","GRADIENT SERIES","MODERN FORM"][index%5] : ["ABSTRACT SERIES","GENERATIVE STUDY","EDITED IN SVG","DESIGN OBJECT","COLOR EXPLORATION"][index%5];
-    const fill=index%4===1?"#081019":"#ffffff";
+    const sub = catalogLabel ? ["GENERATIVE STUDY","DESIGN SYSTEM","VECTOR COMPOSITION","VISUAL SERIES","ALI STUDIO"][index%5] : state.designMode === "blueEditorial" ? ["DESIGN STUDY","POSTER SYSTEM","BLUE EDITORIAL","VISUAL REFERENCE","FORM / VOLUME"][index%5] : state.designMode === "pastelEditorial" ? ["DESIGN STUDY","POSTER SERIES","MODERN COVER","VISUAL SYSTEM","COLOR / FORM"][index%5] : state.designMode === "redEditorial" ? ["EDITORIAL STUDY","RED SYSTEM","DESIGN SERIES","FORM / CONTRAST","VISUAL STUDY"][index%5] : state.designMode === "cyanGeometric" ? ["COLOR SYSTEM","GEOMETRIC STUDY","EDITORIAL POSTER","GRADIENT SERIES","MODERN FORM"][index%5] : ["ABSTRACT SERIES","GENERATIVE STUDY","EDITED IN SVG","DESIGN OBJECT","COLOR EXPLORATION"][index%5];    const fill=index%4===1?"#081019":"#ffffff";
     return `<g font-family="Arial, Helvetica, sans-serif" fill="${fill}" opacity="${(.68+.28*amount).toFixed(2)}">
       <text x="${(w*.08).toFixed(1)}" y="${(h*.10).toFixed(1)}" font-size="${fs}" font-weight="800" letter-spacing="${Math.max(2,fs*.18).toFixed(1)}">${esc(title)}</text>
       <text x="${(w*.08).toFixed(1)}" y="${(h*.13).toFixed(1)}" font-size="${Math.round(fs*.38)}" letter-spacing="${Math.max(1,fs*.07).toFixed(1)}">${esc(sub)}</text>
@@ -768,9 +878,13 @@
     $("spacing").value=10+Math.floor(Math.random()*51);
     $("edgeFade").value=12+Math.floor(Math.random()*65);
     const themes=Object.keys(THEMES); $("theme").value=themes[Math.floor(Math.random()*themes.length)];
-    const modes=["vibrantMix","blueEditorial","pastelEditorial","redEditorial","cyanGeometric","liquid","glass","prism","organic","waves","minimal"]; $("designMode").value=modes[Math.floor(Math.random()*modes.length)];
+    const modes=[...Array.from(document.querySelectorAll("#designMode option")).map(o=>o.value)]; $("designMode").value=modes[Math.floor(Math.random()*modes.length)];
     updateOutputs(); render();
   });
+
+
+  const modeSearch=$("modeSearch");
+  if(modeSearch){ modeSearch.addEventListener("input",()=>{ const q=modeSearch.value.trim().toLowerCase(); document.querySelectorAll("#designMode option").forEach(o=>{o.hidden=!!q && !o.textContent.toLowerCase().includes(q);}); document.querySelectorAll("#designMode optgroup").forEach(g=>{g.hidden=Array.from(g.options).every(o=>o.hidden);}); }); }
 
   $("downloadAll").addEventListener("click",()=>download(`ali-studio-${state.theme}-${state.depth}-collection.svg`,makeCombinedSvg()));
   $("downloadJson").addEventListener("click",()=>download("ali-studio-settings.json",JSON.stringify(state,null,2),"application/json"));
