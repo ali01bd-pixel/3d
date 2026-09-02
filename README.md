@@ -53,3 +53,15 @@ A new `Pastel Editorial Reference` family is included, rotating through:
 - diagonal multi-color stripes
 
 It is designed to produce warm cream, coral, orange, pink and yellow editorial posters with varied compositions. The existing Flat / 3D Depth switch remains available.
+
+
+## Red & Black Editorial Reference Mode
+
+A new `Red & Black Editorial Reference` family is included:
+- soft diagonal red gradient with nested curved bands
+- layered folded red/black fan waves
+- radial red/black ray composition
+- abstract angular red/black shards
+- dramatic cream/red starburst
+
+This family is designed to produce high-contrast editorial poster variations inspired by the supplied reference image and remains compatible with Flat / 3D Depth rendering.
