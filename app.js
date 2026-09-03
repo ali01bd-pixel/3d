@@ -52,6 +52,9 @@
   function sizeFactor(){ return clamp(Number(state.shapeSize)/100,.35,1.55); }
 
   function palette(index){
+    if(state.designMode === "neonEditorial") return {
+      dark:"#040507", mid:"#1a0d4b", a:"#ff2d98", b:"#6f55ff", light:"#a9efff", text:"#ffffff"
+    };
     const base = THEMES[state.theme] || THEMES.candy;
     const themeKeys = Object.keys(THEMES);
     const shift = (Math.floor((Number(state.seed)||1)/17) + index * 3) % themeKeys.length;
@@ -742,8 +745,110 @@
     return out;
   }
 
+
+  function neonEditorialReference(id,w,h,p,rnd,index){
+    const C={
+      black:"#030407", deep:"#10061a", violet:"#5b43ff", purple:"#a340ff",
+      magenta:"#ff2b9b", pink:"#ff63d2", coral:"#ff5a68", orange:"#ff8a42",
+      blue:"#4b7cff", cyan:"#55ddff", white:"#fff8ff"
+    };
+    const s=sizeFactor(), soft=`url(#${id}_soft)`, shadow=`url(#${id}_shadow)`, glow=`url(#${id}_glow)`;
+    let out=`<rect width="${w}" height="${h}" fill="${C.black}"/>`;
+
+    // 1. Large luminous oval.
+    if(index%5===0){
+      const cx=w*(.49+rnd()*.08), cy=h*(.38+rnd()*.12);
+      out+=`<ellipse cx="${(cx-w*.02).toFixed(1)}" cy="${(cy+h*.02).toFixed(1)}"
+        rx="${(w*.37*s).toFixed(1)}" ry="${(h*.23*s).toFixed(1)}"
+        fill="url(#${id}_orb)" opacity=".95" filter="${soft}" transform="rotate(-17 ${cx.toFixed(1)} ${cy.toFixed(1)})"/>`;
+      out+=`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}"
+        rx="${(w*.29*s).toFixed(1)}" ry="${(h*.17*s).toFixed(1)}"
+        fill="url(#${id}_hero)" opacity=".95" filter="${shadow}" transform="rotate(-17 ${cx.toFixed(1)} ${cy.toFixed(1)})"/>`;
+      out+=`<ellipse cx="${(cx-w*.07).toFixed(1)}" cy="${(cy-h*.03).toFixed(1)}"
+        rx="${(w*.13*s).toFixed(1)}" ry="${(h*.075*s).toFixed(1)}"
+        fill="${C.white}" opacity=".14" filter="${glow}" transform="rotate(-17 ${cx.toFixed(1)} ${cy.toFixed(1)})"/>`;
+      out+=`<ellipse cx="${w*.29}" cy="${h*.84}" rx="${w*.27}" ry="${h*.095}"
+        fill="url(#${id}_hero)" opacity=".76" transform="rotate(-23 ${w*.29} ${h*.84})" filter="${soft}"/>`;
+      out+=`<circle cx="${w*.79}" cy="${h*.20}" r="${Math.min(w,h)*.11}" fill="${C.cyan}" opacity=".14" filter="${glow}"/>`;
+      return out;
+    }
+
+    // 2. Sharp diagonal neon ribbons with black channels.
+    if(index%5===1){
+      const count=Math.max(8,Math.floor(Number(state.density)*1.15));
+      for(let i=0;i<count;i++){
+        const x=-w*.18+i*(w*.94/count);
+        const width=w*(.105+.018*rnd())*s;
+        const top=-h*.02+i*h*.045;
+        const col=[C.violet,C.purple,C.magenta,C.pink,C.coral,C.orange][i%6];
+        out+=`<path d="M ${(x-width*.10).toFixed(1)} ${h*1.04}
+          L ${(x+width*.66).toFixed(1)} ${h*1.04}
+          L ${(x+width*1.72).toFixed(1)} ${top.toFixed(1)}
+          L ${(x+width*.78).toFixed(1)} ${top.toFixed(1)} Z"
+          fill="${col}" opacity="${(.58+.30*rnd()).toFixed(2)}" filter="${i%3===0?soft:""}"/>`;
+      }
+      for(let i=0;i<count-1;i++){
+        const x=w*(.10+i*.105);
+        out+=`<path d="M ${x.toFixed(1)} ${h*1.03} L ${(x+w*.07).toFixed(1)} ${h*1.03} L ${(x+w*.30).toFixed(1)} 0 L ${(x+w*.23).toFixed(1)} 0 Z" fill="${C.black}" opacity=".74"/>`;
+      }
+      out+=`<path d="M ${w*.53} 0 L ${w*1.02} 0 L ${w*.53} ${h*.42} Z" fill="${C.orange}" opacity=".27" filter="${soft}"/>`;
+      return out;
+    }
+
+    // 3. Soft diagonal glowing light trails.
+    if(index%5===2){
+      const curves=[
+        [`M ${-w*.12} ${h*.18} C ${w*.18} ${h*.02}, ${w*.56} ${h*.25}, ${w*1.10} ${h*.03}`,C.magenta,.74],
+        [`M ${-w*.12} ${h*.49} C ${w*.20} ${h*.29}, ${w*.60} ${h*.66}, ${w*1.10} ${h*.40}`,C.orange,.58],
+        [`M ${-w*.10} ${h*.82} C ${w*.22} ${h*.58}, ${w*.66} ${h*.94}, ${w*1.08} ${h*.68}`,C.violet,.56]
+      ];
+      curves.forEach((q,i)=>{
+        out+=`<path d="${q[0]}" fill="none" stroke="${q[1]}" stroke-width="${Math.max(36,h*.085*s).toFixed(1)}"
+          stroke-linecap="round" opacity="${q[2]}" filter="${soft}"/>`;
+        out+=`<path d="${q[0]}" fill="none" stroke="${i===1?C.pink:C.white}" stroke-width="${Math.max(6,h*.014*s).toFixed(1)}"
+          stroke-linecap="round" opacity="${(.22+i*.05).toFixed(2)}" filter="${glow}"/>`;
+      });
+      out+=`<ellipse cx="${w*.48}" cy="${h*.42}" rx="${w*.34}" ry="${h*.18}" fill="${C.magenta}" opacity=".12" filter="${soft}"/>`;
+      return out;
+    }
+
+    // 4. Intersecting glowing disks and black negative-space cutout.
+    if(index%5===3){
+      const r=Math.min(w,h)*.21*s;
+      const x1=w*.30,y1=h*.40,x2=w*.64,y2=h*.28;
+      out+=`<circle cx="${x1}" cy="${y1}" r="${r}" fill="url(#${id}_orb)" opacity=".90" filter="${shadow}"/>`;
+      out+=`<circle cx="${x2}" cy="${y2}" r="${r*1.13}" fill="url(#${id}_hero)" opacity=".78" filter="${shadow}"/>`;
+      out+=`<circle cx="${w*.72}" cy="${h*.66}" r="${r*1.06}" fill="${C.black}"/>`;
+      out+=`<circle cx="${w*.72}" cy="${h*.66}" r="${r*1.16}" fill="none" stroke="${C.coral}" stroke-width="${Math.max(7,w*.006)}"
+        stroke-opacity=".34" filter="${soft}"/>`;
+      out+=`<circle cx="${w*.49}" cy="${h*.44}" r="${r*.70}" fill="none" stroke="${C.orange}" stroke-width="${Math.max(3,w*.003)}" stroke-opacity=".55"/>`;
+      out+=`<ellipse cx="${w*.33}" cy="${h*.43}" rx="${r*.55}" ry="${r*.27}" fill="${C.cyan}" opacity=".20" filter="${glow}"/>`;
+      return out;
+    }
+
+    // 5. Luminous editorial grid.
+    const cols=6, rows=10, cw=w/cols, rh=h/rows;
+    const colors=[C.magenta,C.purple,C.violet,C.blue,C.cyan,C.coral,C.orange,C.pink];
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        const strong=(r+c+index)%3!==1 || (c===1&&r>4) || (c===4&&r<6);
+        if(!strong) continue;
+        const x=c*cw+cw*.05, y=r*rh+rh*.04;
+        const ww=cw*(.70+.18*rnd()), hh=rh*(.68+.18*rnd());
+        const col=colors[(r*cols+c+index)%colors.length];
+        out+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${ww.toFixed(1)}" height="${hh.toFixed(1)}"
+          fill="${col}" opacity="${(.38+.50*rnd()).toFixed(2)}"/>`;
+      }
+    }
+    out+=`<rect x="${w*.15}" y="${h*.09}" width="${w*.12}" height="${h*.78}" fill="${C.violet}" opacity=".25" filter="${soft}"/>`;
+    out+=`<rect x="${w*.46}" y="${h*.20}" width="${w*.11}" height="${h*.59}" fill="${C.magenta}" opacity=".24" filter="${soft}"/>`;
+    out+=`<rect x="${w*.70}" y="${h*.62}" width="${w*.20}" height="${h*.09}" fill="${C.orange}" opacity=".38" filter="${glow}"/>`;
+    return out;
+  }
+
   function layoutByMode(index,w,h,p,rnd,id){
     const mode = state.designMode;
+    if(mode === "neonEditorial") return neonEditorialReference(id,w,h,p,rnd,index);
     if(mode === "liquid") return liquid(id,w,h,p,rnd);
     if(mode === "glass") return spheres(id,w,h,p,rnd);
     if(mode === "prism") return prisms(id,w,h,p,rnd);
@@ -764,9 +869,9 @@
     const amount=Number(state.textAmount)/100;
     if(amount<=0) return "";
     const catalogLabel = state.designMode.startsWith("catalog_") ? (document.querySelector(`#designMode option[value="${state.designMode}"]`)?.textContent || "ABSTRACT") : "";
-    const titles = catalogLabel ? [catalogLabel.toUpperCase()] : state.designMode === "blueEditorial" ? ["DESIGN INSPIRATION","ABSTRACT POSTER","ABSTRACT / 01","INSPIRATION","CREATE","BLUE FORM","VISUAL STUDY","MODERN ART"] : state.designMode === "pastelEditorial" ? ["DESIGN INSPIRATION","INSPIRATION","MODERN COVER","COVER DESIGN","MODERN ART","COLOR STUDY","DESIGN POSTER","SOFT FORM"] : state.designMode === "redEditorial" ? ["DESIGN","RED FORM","DESIGN","INSPIRATION","MODERN ART","ABSTRACT","FORM / MOTION","VISUAL DESIGN"] : state.designMode === "cyanGeometric" ? ["GRADIENT DESIGN","GEOMETRIC","ABSTRACT","GRADIENT","MODERN COVER","COLOR FORM","PRISM","VISUAL STUDY"] : ["VIVID MOTION","COLOR / FORM","SOFT IMPACT","NEW DIMENSION","VISUAL ENERGY","LIQUID SYSTEM","LIGHT / VOLUME","MODERN OBJECT"];    const title=titles[index%titles.length];
+    const titles = state.designMode === "neonEditorial" ? ["DESIGN","GRADIENT DESIGN","ABSTRACT","INSPIRATION","MODERN ART","VISUAL FORM"] : ["DESIGN","GRADIENT DESIGN","ABSTRACT","INSPIRATION","MODERN ART","VISUAL FORM"];    const title=titles[index%titles.length];
     const fs=Math.max(18,Math.round(Math.min(w,h)*.026));
-    const sub = catalogLabel ? ["GENERATIVE STUDY","DESIGN SYSTEM","VECTOR COMPOSITION","VISUAL SERIES","ALI STUDIO"][index%5] : state.designMode === "blueEditorial" ? ["DESIGN STUDY","POSTER SYSTEM","BLUE EDITORIAL","VISUAL REFERENCE","FORM / VOLUME"][index%5] : state.designMode === "pastelEditorial" ? ["DESIGN STUDY","POSTER SERIES","MODERN COVER","VISUAL SYSTEM","COLOR / FORM"][index%5] : state.designMode === "redEditorial" ? ["EDITORIAL STUDY","RED SYSTEM","DESIGN SERIES","FORM / CONTRAST","VISUAL STUDY"][index%5] : state.designMode === "cyanGeometric" ? ["COLOR SYSTEM","GEOMETRIC STUDY","EDITORIAL POSTER","GRADIENT SERIES","MODERN FORM"][index%5] : ["ABSTRACT SERIES","GENERATIVE STUDY","EDITED IN SVG","DESIGN OBJECT","COLOR EXPLORATION"][index%5];    const fill=index%4===1?"#081019":"#ffffff";
+    const sub=["EDITORIAL STUDY","NEON SYSTEM","GRADIENT SERIES","FORM / LIGHT","VISUAL STUDY"][index%5];    const fill=index%4===1?"#081019":"#ffffff";
     return `<g font-family="Arial, Helvetica, sans-serif" fill="${fill}" opacity="${(.68+.28*amount).toFixed(2)}">
       <text x="${(w*.08).toFixed(1)}" y="${(h*.10).toFixed(1)}" font-size="${fs}" font-weight="800" letter-spacing="${Math.max(2,fs*.18).toFixed(1)}">${esc(title)}</text>
       <text x="${(w*.08).toFixed(1)}" y="${(h*.13).toFixed(1)}" font-size="${Math.round(fs*.38)}" letter-spacing="${Math.max(1,fs*.07).toFixed(1)}">${esc(sub)}</text>
@@ -790,7 +895,7 @@
     out = addLight(out,id,w,h,rnd,p);
     out += textLayer(id,index,w,h,p);
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-      <title>ALI STUDIO — ${esc(state.theme)} ${state.depth === "3d" ? "3D" : "Flat"} Design ${String(index+1).padStart(2,"0")}</title>
+      <title>ALI STUDIO — NEON GRADIENT EDITORIAL ${state.depth === "3d" ? "3D" : "FLAT"} DESIGN ${String(index+1).padStart(2,"0")}</title>
       <metadata>Generated locally by ALI STUDIO. All visible artwork is SVG.</metadata>
       ${out}
     </svg>`;
@@ -801,7 +906,7 @@
     const count=Number(state.posterCount), cols=Math.min(4,Math.max(1,count)), rows=Math.ceil(count/cols), gap=36;
     const aw=pw*cols+gap*(cols+1), ah=ph*rows+gap*(rows+1);
     let out=`<svg xmlns="http://www.w3.org/2000/svg" width="${aw}" height="${ah}" viewBox="0 0 ${aw} ${ah}">
-      <title>ALI STUDIO — Vibrant Design Collection</title><rect width="${aw}" height="${ah}" fill="#e7e9f0"/>`;
+      <title>ALI STUDIO — NEON GRADIENT EDITORIAL COLLECTION</title><rect width="${aw}" height="${ah}" fill="#e7e9f0"/>`;
     for(let i=0;i<count;i++){
       const x=gap+(i%cols)*(pw+gap), y=gap+Math.floor(i/cols)*(ph+gap);
       const svg=makeSvg(i).replace(/^<svg[^>]*>/,"").replace(/<\/svg>\s*$/i,"");
@@ -878,7 +983,7 @@
     $("spacing").value=10+Math.floor(Math.random()*51);
     $("edgeFade").value=12+Math.floor(Math.random()*65);
     const themes=Object.keys(THEMES); $("theme").value=themes[Math.floor(Math.random()*themes.length)];
-    const modes=[...Array.from(document.querySelectorAll("#designMode option")).map(o=>o.value)]; $("designMode").value=modes[Math.floor(Math.random()*modes.length)];
+    $("designMode").value="neonEditorial";
     updateOutputs(); render();
   });
 

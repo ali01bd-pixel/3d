@@ -43,3 +43,9 @@ button{cursor:pointer}
 .reference-chip{display:inline-flex;align-items:center;margin-top:8px;padding:5px 8px;border-radius:999px;background:linear-gradient(135deg,rgba(47,120,255,.18),rgba(145,211,255,.16));border:1px solid rgba(115,190,255,.24);color:#9fd8ff;font-size:8px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
 
 .mode-search-wrap{margin-top:10px}.mode-search{margin-top:0}.mode-search::placeholder{color:#777f90}.control-block select#designMode{max-height:340px}.control-block select#designMode optgroup{background:#171b24;color:#8fc9ff;font-weight:800}.control-block select#designMode option{background:#10131a;color:#edf2ff}
+
+.reference-chip{
+  display:inline-flex;align-items:center;margin-top:8px;padding:5px 9px;border-radius:999px;
+  background:linear-gradient(135deg,rgba(255,45,152,.12),rgba(106,73,255,.16),rgba(73,209,255,.10));
+  border:1px solid rgba(147,126,255,.26);color:#d6ccff;font-size:8px;font-weight:900;letter-spacing:.10em
+}
