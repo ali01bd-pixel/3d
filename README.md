@@ -1,15 +1,12 @@
-# ALI STUDIO — Neon Gradient Editorial Generator
+# ALI STUDIO — Solid + Gradient Editorial Reference
 
-The previous large design-mode catalog has been removed from the visible DESIGN FAMILY selector.
+This build replaces the previous multi-mode design catalog with one focused reference-inspired mode.
 
-The new selector contains one polished reference-inspired family:
-**Neon Gradient Editorial Reference**
+It generates five distinct poster compositions:
+1. flowing multi-color rings
+2. angular ribbon / prism composition on an ivory background
+3. black poster with orbiting gradient bands
+4. colorful geometric editorial collage
+5. vertical gradient bars
 
-It creates five distinct black-background poster compositions:
-1. luminous gradient oval
-2. sharp diagonal neon ribbons
-3. soft diagonal neon trails
-4. intersecting glowing disks
-5. luminous editorial grid
-
-The existing Flat / 3D Depth control, seeded variations, format/quality settings, editable SVG export, individual download, collection download, copy SVG, JSON settings and zoom remain available.
+SVG output uses only solid fills, strokes, linear gradients, radial gradients and text. No filters, blur, masks, clip paths, drop shadows, or other SVG effects are generated.

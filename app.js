@@ -1,1000 +1,154 @@
 (() => {
-  "use strict";
-
-  const $ = id => document.getElementById(id);
-  const clamp = (n,a,b) => Math.max(a, Math.min(b,n));
-  const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
-  const mulberry32 = a => () => {
-    let t = a += 0x6D2B79F5;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-  const TAU = Math.PI * 2;
-
-  const THEMES = {
-    candy:    { dark:"#21062e", mid:"#b31965", a:"#ff4fd8", b:"#ff7d62", light:"#ffe18a", text:"#ffffff" },
-    electric: { dark:"#03142c", mid:"#0849a7", a:"#28b9ff", b:"#6560ff", light:"#d8f7ff", text:"#ffffff" },
-    tropical: { dark:"#042b2a", mid:"#078f76", a:"#2de7c7", b:"#8dff72", light:"#ffe56b", text:"#08231f" },
-    berry:    { dark:"#24051e", mid:"#7f185e", a:"#ed3a9f", b:"#9a4dff", light:"#ffb2df", text:"#ffffff" },
-    aqua:     { dark:"#02252d", mid:"#007f94", a:"#16e2ef", b:"#4c9dff", light:"#c9fff6", text:"#ffffff" },
-    solar:    { dark:"#351006", mid:"#d44b06", a:"#ff8d28", b:"#ffd447", light:"#fff1ad", text:"#331a05" },
-    violet:   { dark:"#15072c", mid:"#4f1d9a", a:"#9c63ff", b:"#fb5fff", light:"#e9d5ff", text:"#ffffff" },
-    lime:     { dark:"#111c02", mid:"#4f8809", a:"#9dea20", b:"#48e27c", light:"#f0ff92", text:"#122006" }
-  };
-
-  const state = {
-    posterCount:5, designMode:"vibrantMix", theme:"candy", depth:"flat",
-    shapeSize:100, density:8, gradientSoftness:72, spacing:24, edgeFade:34, textAmount:55,
-    seed:260831, format:"portrait", quality:"large", darkColor:"#12052d", lightColor:"#ffe28a"
-  };
-
-  let generated = [], zoom = 1;
-
-  function dims(){
-    const base = {portrait:{w:1200,h:1800},square:{w:1600,h:1600},landscape:{w:1800,h:1200}}[state.format];
-    const q = {standard:1,large:1.35,xl:1.8}[state.quality];
-    return {w:Math.round(base.w*q),h:Math.round(base.h*q)};
-  }
-
-  function hexToRgb(hex){
-    const s = String(hex).replace("#","");
-    const clean = s.length === 3 ? s.split("").map(x=>x+x).join("") : s;
-    const v = parseInt(clean,16) || 0;
-    return {r:(v>>16)&255,g:(v>>8)&255,b:v&255};
-  }
-
-  function mixHex(a,b,t){
-    const A=hexToRgb(a), B=hexToRgb(b);
-    return "#"+[A.r,A.g,A.b].map((v,i)=>Math.round(v*(1-t)+[B.r,B.g,B.b][i]*t).toString(16).padStart(2,"0")).join("");
-  }
-
-  function sizeFactor(){ return clamp(Number(state.shapeSize)/100,.35,1.55); }
-
-  function palette(index){
-    if(state.designMode === "neonEditorial") return {
-      dark:"#040507", mid:"#1a0d4b", a:"#ff2d98", b:"#6f55ff", light:"#a9efff", text:"#ffffff"
-    };
-    const base = THEMES[state.theme] || THEMES.candy;
-    const themeKeys = Object.keys(THEMES);
-    const shift = (Math.floor((Number(state.seed)||1)/17) + index * 3) % themeKeys.length;
-    const alt = THEMES[themeKeys[shift]];
-    const tint = ((index * 0.17) % 0.75);
-    return {
-      dark: state.darkColor || mixHex(base.dark, alt.dark, tint * .2),
-      mid: mixHex(base.mid, alt.mid, tint),
-      a: mixHex(base.a, alt.a, (tint + .12) % 1),
-      b: mixHex(base.b, alt.b, (tint + .28) % 1),
-      light: state.lightColor || mixHex(base.light, alt.light, tint * .35),
-      text: index % 4 === 1 ? "#071019" : (base.text || "#fff")
-    };
-  }
-
-  function commonDefs(id,p,rnd){
-    const softness = Math.max(1.5, 2 + (100 - Number(state.gradientSoftness)) * .13);
-    const depth = state.depth === "3d";
-    return `<defs>
-      <linearGradient id="${id}_bg" x1="${rnd()*20}%" y1="100%" x2="${80+rnd()*20}%" y2="0%">
-        <stop offset="0%" stop-color="${p.dark}"/>
-        <stop offset="34%" stop-color="${p.mid}"/>
-        <stop offset="68%" stop-color="${p.a}"/>
-        <stop offset="100%" stop-color="${p.light}"/>
-      </linearGradient>
-      <linearGradient id="${id}_hero" x1="10%" y1="90%" x2="90%" y2="10%">
-        <stop offset="0%" stop-color="${p.a}"/>
-        <stop offset="52%" stop-color="${p.b}"/>
-        <stop offset="100%" stop-color="${p.light}"/>
-      </linearGradient>
-      <linearGradient id="${id}_dark" x1="0%" y1="100%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="${mixHex(p.dark,"#000000",.12)}"/>
-        <stop offset="72%" stop-color="${p.mid}"/>
-        <stop offset="100%" stop-color="${p.a}"/>
-      </linearGradient>
-      <radialGradient id="${id}_orb" cx="30%" cy="24%" r="78%">
-        <stop offset="0%" stop-color="#ffffff" stop-opacity=".90"/>
-        <stop offset="20%" stop-color="${p.light}" stop-opacity=".96"/>
-        <stop offset="62%" stop-color="${p.a}" stop-opacity=".95"/>
-        <stop offset="100%" stop-color="${p.dark}" stop-opacity=".96"/>
-      </radialGradient>
-      <filter id="${id}_soft" x="-40%" y="-40%" width="180%" height="180%">
-        <feGaussianBlur stdDeviation="${softness}"/>
-      </filter>
-      <filter id="${id}_shadow" x="-50%" y="-50%" width="200%" height="200%">
-        <feDropShadow dx="0" dy="${depth ? 16 : 7}" stdDeviation="${depth ? 14 : 8}" flood-color="#080715" flood-opacity="${depth ? .48 : .22}"/>
-      </filter>
-      <filter id="${id}_glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="${depth ? 18 : 12}"/></filter>
-    </defs>`;
-  }
-
-  function addLight(out,id,w,h,rnd,p){
-    const fade = Number(state.edgeFade)/100;
-    if(fade<=0) return out;
-    out += `<ellipse cx="${(w*(.14+rnd()*.20)).toFixed(1)}" cy="${(h*(.08+rnd()*.20)).toFixed(1)}" rx="${(w*.30).toFixed(1)}" ry="${(h*.18).toFixed(1)}" fill="${p.light}" opacity="${(.07+fade*.14).toFixed(2)}" filter="url(#${id}_soft)"/>`;
-    out += `<ellipse cx="${(w*(.86-rnd()*.10)).toFixed(1)}" cy="${(h*(.78-rnd()*.10)).toFixed(1)}" rx="${(w*.24).toFixed(1)}" ry="${(h*.17).toFixed(1)}" fill="${p.b}" opacity="${(.06+fade*.10).toFixed(2)}" filter="url(#${id}_soft)"/>`;
-    return out;
-  }
-
-  function circleGrid(id,w,h,p,rnd){
-    let out=""; const cols=4+(Number(state.density)>12?1:0), rows=6+(Number(state.density)%4), s=sizeFactor();
-    const cellW=w/(cols+1), cellH=h/(rows+1), base=Math.min(cellW,cellH)*.43*s;
-    for(let row=0;row<rows;row++) for(let col=0;col<cols;col++){
-      const x=cellW*(col+1)+Math.sin(row+col)*cellW*.05, y=cellH*(row+1)+Math.cos(col*.8)*cellH*.035;
-      const r=base*(.62+rnd()*.48), fill=(row+col)%3===0?`url(#${id}_orb)`:(row%2?`url(#${id}_hero)`:p.b);
-      out += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" opacity=".94" filter="url(#${id}_shadow)"/>`;
-    }
-    return out;
-  }
-
-  function ribbonBars(id,w,h,p,rnd){
-    let out=""; const s=sizeFactor(), gap=Number(state.spacing)/100, bars=3+(Number(state.density)%5);
-    const barH=h*(.13+.06*s), width=w*(.63+.25*(1-gap));
-    for(let i=0;i<bars;i++){
-      const y=h*(.17+i*(.74/Math.max(1,bars-1))), dx=(rnd()-.5)*w*.10*gap;
-      const rot=(rnd()-.5)*9;
-      out += `<g transform="translate(${dx.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)})" filter="url(#${id}_shadow)"><rect x="${(-width/2).toFixed(1)}" y="${(-barH/2).toFixed(1)}" width="${width.toFixed(1)}" height="${barH.toFixed(1)}" rx="${(barH*.42).toFixed(1)}" fill="${i%2?`url(#${id}_hero)`:p.a}" opacity=".95"/><rect x="${(-width*.30).toFixed(1)}" y="${(-barH*.28).toFixed(1)}" width="${(width*.62).toFixed(1)}" height="${(barH*.16).toFixed(1)}" rx="20" fill="#fff" opacity=".14"/></g>`;
-    }
-    return out;
-  }
-
-  function spheres(id,w,h,p,rnd){
-    let out=""; const s=sizeFactor(), count=5+Math.floor(Number(state.density)/4), min=Math.min(w,h);
-    for(let i=0;i<count;i++){
-      const x=w*(.16+rnd()*.68), y=h*(.16+rnd()*.66), r=min*(.06+rnd()*.14)*s;
-      const fill=i%3===0?`url(#${id}_orb)`:i%3===1?`url(#${id}_hero)`:p.dark;
-      out += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" opacity=".97" filter="url(#${id}_shadow)"/>`;
-      if(state.depth==="3d") out += `<ellipse cx="${(x-r*.25).toFixed(1)}" cy="${(y-r*.30).toFixed(1)}" rx="${(r*.32).toFixed(1)}" ry="${(r*.18).toFixed(1)}" fill="#fff" opacity=".36" filter="url(#${id}_soft)"/>`;
-    }
-    return out;
-  }
-
-  function petals(id,w,h,p,rnd){
-    let out=""; const cx=w*(.5+rnd()*.08-.04), cy=h*(.49+rnd()*.10-.05), R=Math.min(w,h)*.30*sizeFactor();
-    const petals=5+Math.round(Number(state.density)/5);
-    for(let i=0;i<petals;i++){
-      const a=i*TAU/petals-rnd()*.16, x=cx+Math.cos(a)*R*.56, y=cy+Math.sin(a)*R*.56, rx=R*(.44+rnd()*.26), ry=R*(.17+rnd()*.10);
-      const rot=a*180/Math.PI+30;
-      out += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" transform="rotate(${rot.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="${i%2?`url(#${id}_hero)`:p.a}" opacity=".92" filter="url(#${id}_shadow)"/>`;
-    }
-    out += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(R*.26).toFixed(1)}" fill="url(#${id}_orb)" filter="url(#${id}_shadow)"/>`;
-    return out;
-  }
-
-  function waves(id,w,h,p,rnd){
-    let out=""; const lines=4+Math.floor(Number(state.density)/3), amp=h*.045*sizeFactor();
-    for(let j=0;j<lines;j++){
-      const y=h*(.18+j*.16), pts=[];
-      const segments=16;
-      for(let i=0;i<=segments;i++){const x=w*(i/segments); const yy=y+Math.sin(i*.75+j*.9)*amp*(.6+rnd()*.65); pts.push(`${x.toFixed(1)},${yy.toFixed(1)}`)}
-      out += `<polyline points="${pts.join(" ")}" fill="none" stroke="${j%2?p.light:p.a}" stroke-width="${Math.max(9,w*.010*sizeFactor()).toFixed(1)}" stroke-linecap="round" opacity="${(.62+j*.05).toFixed(2)}" filter="url(#${id}_shadow)"/>`;
-    }
-    return out;
-  }
-
-  function prisms(id,w,h,p,rnd){
-    let out=""; const count=5+Math.floor(Number(state.density)/5), s=sizeFactor();
-    for(let i=0;i<count;i++){
-      const cx=w*(.16+rnd()*.68), cy=h*(.14+rnd()*.72), r=Math.min(w,h)*(.08+rnd()*.12)*s;
-      const pts=[0,1,2,3,4,5].map(k=>{const a=-Math.PI/2+k*TAU/6+(rnd()-.5)*.2; return `${(cx+Math.cos(a)*r).toFixed(1)},${(cy+Math.sin(a)*r).toFixed(1)}`}).join(" ");
-      out += `<polygon points="${pts}" fill="${i%2?`url(#${id}_hero)`:p.dark}" opacity=".95" filter="url(#${id}_shadow)"/>`;
-      if(state.depth==="3d") out += `<polygon points="${pts}" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="${Math.max(3,w*.003)}"/>`;
-    }
-    return out;
-  }
-
-  function minimal(id,w,h,p,rnd){
-    let out=""; const s=sizeFactor();
-    const blocks=3+Math.floor(Number(state.density)/5);
-    for(let i=0;i<blocks;i++){
-      const x=w*(.12+rnd()*.60), y=h*(.16+rnd()*.64), ww=w*(.14+rnd()*.25)*s, hh=h*(.08+rnd()*.15)*s;
-      const rot=(rnd()-.5)*24;
-      out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${ww.toFixed(1)}" height="${hh.toFixed(1)}" rx="${Math.min(80,hh*.35).toFixed(1)}" transform="rotate(${rot.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="${i%2?`url(#${id}_hero)`:p.a}" opacity=".9" filter="url(#${id}_shadow)"/>`;
-    }
-    return out;
-  }
-
-  function liquid(id,w,h,p,rnd){
-    let out=""; const s=sizeFactor();
-    const blobs=5+Math.floor(Number(state.density)/4);
-    for(let i=0;i<blobs;i++){
-      const x=w*(.12+rnd()*.76), y=h*(.14+rnd()*.72), rx=w*(.10+rnd()*.20)*s, ry=h*(.06+rnd()*.16)*s;
-      const d=`M ${x-rx} ${y} C ${x-rx*.7} ${y-ry*1.15}, ${x+rx*.2} ${y-ry*.8}, ${x+rx} ${y-rnd()*ry*.1} C ${x+rx*.7} ${y+ry*1.1}, ${x-rx*.1} ${y+ry*.9}, ${x-rx} ${y} Z`;
-      out += `<path d="${d}" fill="${i%2?`url(#${id}_hero)`:p.a}" opacity=".92" filter="url(#${id}_shadow)"/>`;
-    }
-    return out;
-  }
-
-
-  function referenceEditorial(id,w,h,p,rnd,index){
-    // Blue/black editorial family inspired by the supplied reference sheet.
-    // Five distinct compositions rotate automatically.
-    const s = sizeFactor();
-    const blue0 = state.darkColor || "#04102a";
-    const blue1 = "#0b2b67";
-    const blue2 = "#285ebc";
-    const blue3 = state.lightColor || "#b9e3ff";
-    const bright = "#e7f7ff";
-    const black = "#01050b";
-    const shadow = `url(#${id}_shadow)`;
-    const glow = `url(#${id}_glow)`;
-    let out = "";
-
-    // 01: overlapping translucent circles.
-    if(index % 5 === 0){
-      out += `<rect width="${w}" height="${h}" fill="${black}"/>`;
-      const r1 = Math.min(w,h)*(.35 + rnd()*.07)*s;
-      const r2 = Math.min(w,h)*(.28 + rnd()*.06)*s;
-      const r3 = Math.min(w,h)*(.23 + rnd()*.05)*s;
-      const c1x=w*(.27+rnd()*.06), c1y=h*(.16+rnd()*.09);
-      const c2x=w*(.71+rnd()*.06), c2y=h*(.43+rnd()*.08);
-      const c3x=w*(.28+rnd()*.08), c3y=h*(.82-rnd()*.05);
-      out += `<circle cx="${c1x.toFixed(1)}" cy="${c1y.toFixed(1)}" r="${r1.toFixed(1)}" fill="url(#${id}_orb)" opacity=".82" filter="${shadow}"/>`;
-      out += `<circle cx="${c2x.toFixed(1)}" cy="${c2y.toFixed(1)}" r="${r2.toFixed(1)}" fill="url(#${id}_hero)" opacity=".70" filter="${shadow}"/>`;
-      out += `<circle cx="${c3x.toFixed(1)}" cy="${c3y.toFixed(1)}" r="${r3.toFixed(1)}" fill="url(#${id}_dark)" opacity=".95" filter="${shadow}"/>`;
-      out += `<circle cx="${c2x.toFixed(1)}" cy="${c2y.toFixed(1)}" r="${(r2+5).toFixed(1)}" fill="none" stroke="${bright}" stroke-opacity=".70" stroke-width="${Math.max(3,w*.0025).toFixed(1)}"/>`;
-      out += `<ellipse cx="${(w*.45).toFixed(1)}" cy="${(h*.13).toFixed(1)}" rx="${(w*.23).toFixed(1)}" ry="${(h*.11).toFixed(1)}" fill="${blue3}" opacity=".13" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 02: soft vertical light beam.
-    if(index % 5 === 1){
-      out += `<rect width="${w}" height="${h}" fill="${black}"/>`;
-      out += `<rect width="${w}" height="${h}" fill="url(#${id}_bg)" opacity=".58"/>`;
-      const bx=w*(.34+rnd()*.16), by=h*(.42+rnd()*.12);
-      out += `<path d="M ${w*.41} ${h*1.05} C ${w*.40} ${h*.77}, ${w*.28} ${h*.46}, ${w*.45} ${h*.07} C ${w*.59} ${h*.23}, ${w*.66} ${h*.60}, ${w*.54} ${h*1.04} Z"
-        fill="url(#${id}_hero)" opacity=".74" filter="${glow}"/>`;
-      out += `<ellipse cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" rx="${(w*.15).toFixed(1)}" ry="${(h*.36).toFixed(1)}" fill="${bright}" opacity=".22" filter="${glow}"/>`;
-      out += `<ellipse cx="${(bx+w*.04).toFixed(1)}" cy="${(by-h*.05).toFixed(1)}" rx="${(w*.065).toFixed(1)}" ry="${(h*.20).toFixed(1)}" fill="${bright}" opacity=".18" filter="${glow}"/>`;
-      out += `<path d="M ${w*.06} ${h*.84} C ${w*.22} ${h*.68}, ${w*.37} ${h*.58}, ${w*.68} ${h*.28}" fill="none" stroke="${blue3}" stroke-opacity=".16" stroke-width="${Math.max(10,w*.012)}" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 03: stepped V-shaped glow.
-    if(index % 5 === 2){
-      out += `<rect width="${w}" height="${h}" fill="${black}"/>`;
-      const steps = Math.max(12, Math.floor(Number(state.density)*1.7));
-      const centerX = w*(.48 + (rnd()-.5)*.08);
-      const baseY = h*(.72 + rnd()*.07);
-      const band = h*.028*s;
-      for(let i=0;i<steps;i++){
-        const t=i/(steps-1), side=i<steps/2?-1:1, u=Math.abs(t-.5)*2;
-        const x=centerX + side*(w*.38*u);
-        const y=baseY - h*.23*(1-u) - h*.035*Math.sin(t*10);
-        const bh=band*(1.38-.52*u), bw=w*(.026+.020*(1-u));
-        const fill=i%3===0?`url(#${id}_orb)`:`url(#${id}_hero)`;
-        out += `<rect x="${(x-bw/2).toFixed(1)}" y="${(y-bh/2).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${fill}" opacity="${(.34+.50*(1-u)).toFixed(2)}" filter="${shadow}"/>`;
-      }
-      out += `<path d="M ${w*.12} ${h*.82} Q ${w*.49} ${h*.50} ${w*.88} ${h*.82}" fill="none" stroke="${bright}" stroke-opacity=".20" stroke-width="${Math.max(10,w*.008)}" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 04: thin flowing contour/vortex lines.
-    if(index % 5 === 3){
-      out += `<rect width="${w}" height="${h}" fill="${black}"/>`;
-      const lines=Math.max(24,Math.floor(Number(state.density)*3.6));
-      const centerX=w*(.51+rnd()*.04), centerY=h*(.66+rnd()*.08);
-      for(let i=0;i<lines;i++){
-        const t=i/(lines-1), spread=w*(.08+t*.44), y0=h*(.04+t*.52), leftX=centerX-spread, rightX=centerX+spread;
-        const bend=h*(.18+.08*Math.sin(t*TAU));
-        const stroke=i%4===0?bright:(i%2?blue3:blue2);
-        const sw=Math.max(1.6,w*(.0012+.00075*(1-t)));
-        out += `<path d="M ${leftX.toFixed(1)} ${y0.toFixed(1)}
-          C ${(leftX+spread*.40).toFixed(1)} ${(y0+bend).toFixed(1)},
-            ${(centerX-spread*.28).toFixed(1)} ${(centerY-bend*.30).toFixed(1)},
-            ${centerX.toFixed(1)} ${centerY.toFixed(1)}
-          C ${(centerX+spread*.28).toFixed(1)} ${(centerY-bend*.18).toFixed(1)},
-            ${(rightX-spread*.35).toFixed(1)} ${(y0+bend*.8).toFixed(1)},
-            ${rightX.toFixed(1)} ${y0.toFixed(1)}"
-          fill="none" stroke="${stroke}" stroke-opacity="${(.18+.50*(1-t)).toFixed(2)}" stroke-width="${sw.toFixed(1)}"/>`;
-      }
-      out += `<ellipse cx="${centerX.toFixed(1)}" cy="${centerY.toFixed(1)}" rx="${(w*.18).toFixed(1)}" ry="${(h*.08).toFixed(1)}" fill="${blue2}" opacity=".12" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 05: large nested arcs.
-    out += `<rect width="${w}" height="${h}" fill="url(#${id}_bg)" opacity=".96"/>`;
-    const cx=w*(.78+rnd()*.05), cy=h*(.73+rnd()*.07), arcCount=Math.max(6,Math.floor(Number(state.density)/2));
-    for(let i=0;i<arcCount;i++){
-      const rx=w*(.30+i*.075), ry=h*(.14+i*.052);
-      const startX=cx-rx, startY=cy-ry*.20, endX=cx+rx*.05, endY=cy-ry;
-      const curve=`M ${startX.toFixed(1)} ${startY.toFixed(1)} C ${(cx-rx*.52).toFixed(1)} ${(cy-ry*.95).toFixed(1)}, ${(cx-rx*.08).toFixed(1)} ${(cy-ry*1.03).toFixed(1)}, ${endX.toFixed(1)} ${endY.toFixed(1)}`;
-      const stroke=i%3===0?bright:(i%2?blue3:blue2);
-      out += `<path d="${curve}" fill="none" stroke="${stroke}" stroke-opacity="${(.20+.62*(1-i/arcCount)).toFixed(2)}" stroke-width="${Math.max(3,w*.0035*(1-i*.025)).toFixed(1)}" stroke-linecap="round"/>`;
-    }
-    out += `<path d="M ${w*.02} ${h*.28} C ${w*.28} ${h*.06}, ${w*.50} ${h*.12}, ${w*.66} ${h*.30}" fill="none" stroke="${blue3}" stroke-opacity=".28" stroke-width="${Math.max(5,w*.006)}" filter="${glow}"/>`;
-    return out;
-  }
-
-
-  function pastelEditorial(id,w,h,p,rnd,index){
-    // Five warm editorial compositions inspired by the supplied pastel/orange/pink reference.
-    const s = sizeFactor();
-    const C = {
-      bg: "#f1e2d0",
-      cream: "#f8ecd9",
-      peach: "#ffb266",
-      orange: "#ff7b35",
-      coral: "#ff5f6f",
-      pink: "#ee4a9c",
-      rose: "#d62c77",
-      yellow: "#ffd86b",
-      red: "#f23d52",
-      ink: "#4b2030"
-    };
-    const shadow = `url(#${id}_shadow)`;
-    const glow = `url(#${id}_glow)`;
-    let out = "";
-
-    // 01 — Rounded vertical descending/ascending droplet bars.
-    if(index % 5 === 0){
-      out += `<rect width="${w}" height="${h}" fill="${C.bg}"/>`;
-      const cols = Math.max(5, Math.floor(Number(state.density)/2)+2);
-      const gap = w/(cols+1);
-      for(let i=0;i<cols;i++){
-        const x = gap*(i+1);
-        const yy = h*(.18 + (i%2)*.10 + rnd()*.05);
-        const bh = h*(.18 + rnd()*.16)*s;
-        const bw = gap*(.52 + rnd()*.14);
-        const colors = [C.pink,C.peach,C.orange,C.yellow,C.coral];
-        const col = colors[(i+index)%colors.length];
-        out += `<rect x="${(x-bw/2).toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}"
-          rx="${(bw*.48).toFixed(1)}" fill="${col}" opacity=".95" filter="${shadow}"/>`;
-        out += `<ellipse cx="${x.toFixed(1)}" cy="${(yy+bh).toFixed(1)}" rx="${(bw*.48).toFixed(1)}" ry="${(bw*.46).toFixed(1)}" fill="${col}" opacity=".98"/>`;
-      }
-      out += `<ellipse cx="${w*.74}" cy="${h*.20}" rx="${w*.21}" ry="${h*.10}" fill="${C.yellow}" opacity=".18" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 02 — Concentric spiral/ring spheres.
-    if(index % 5 === 1){
-      out += `<rect width="${w}" height="${h}" fill="${C.cream}"/>`;
-      const centers = [
-        [w*.27,h*.28,Math.min(w,h)*.15],
-        [w*.67,h*.27,Math.min(w,h)*.22],
-        [w*.40,h*.68,Math.min(w,h)*.19],
-        [w*.76,h*.68,Math.min(w,h)*.11]
-      ];
-      centers.forEach((c,ci)=>{
-        const [cx,cy,R]=c;
-        const rings = Math.max(6, Math.floor(Number(state.density)/2));
-        for(let j=0;j<rings;j++){
-          const r=R*(1-j/rings*.82);
-          const col=[C.pink,C.orange,C.yellow,C.coral,C.red][(j+ci)%5];
-          const yy = cy + Math.sin(j*.55+ci)*R*.035;
-          out += `<circle cx="${cx.toFixed(1)}" cy="${yy.toFixed(1)}" r="${r.toFixed(1)}" fill="none"
-            stroke="${col}" stroke-width="${Math.max(7,r*.18).toFixed(1)}" stroke-opacity="${(.28+.56*(1-j/rings)).toFixed(2)}"/>`;
-        }
-        out += `<circle cx="${(cx-R*.13).toFixed(1)}" cy="${(cy-R*.14).toFixed(1)}" r="${(R*.15).toFixed(1)}" fill="${C.yellow}" opacity=".42" filter="${glow}"/>`;
-      });
-      return out;
-    }
-
-    // 03 — Soft vertical warm gradient bars / modern cover.
-    if(index % 5 === 2){
-      out += `<rect width="${w}" height="${h}" fill="${C.bg}"/>`;
-      const bars = Math.max(9, Number(state.density)+4);
-      const bw = w/(bars*1.6);
-      for(let i=0;i<bars;i++){
-        const x=w*.13 + i*(w*.74/(bars-1));
-        const bh=h*(.26 + .045*i)*(0.82+rnd()*.30)*s;
-        const y=h*.77-bh;
-        const fill = i%4===0?C.yellow:(i%4===1?C.peach:(i%4===2?C.orange:C.coral));
-        out += `<rect x="${(x-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}"
-          fill="${fill}" opacity="${(.25+.58*(i/bars)).toFixed(2)}"/>`;
-      }
-      out += `<rect x="0" y="${(h*.62).toFixed(1)}" width="${w}" height="${(h*.38).toFixed(1)}" fill="${C.cream}" opacity=".28"/>`;
-      out += `<ellipse cx="${w*.51}" cy="${h*.66}" rx="${w*.22}" ry="${h*.13}" fill="${C.yellow}" opacity=".13" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 04 — Giant nested rainbow arcs / semicircular cover.
-    if(index % 5 === 3){
-      out += `<rect width="${w}" height="${h}" fill="${C.bg}"/>`;
-      const cx=w*.49, cy=h*.36;
-      const rings=Math.max(7, Math.floor(Number(state.density)/2)+4);
-      for(let i=0;i<rings;i++){
-        const R=Math.min(w,h)*(.33+i*.055)*s;
-        const col=[C.coral,C.orange,C.peach,C.yellow,C.pink,C.red][i%6];
-        out += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${R.toFixed(1)}" fill="none"
-          stroke="${col}" stroke-width="${Math.max(18,R*.13).toFixed(1)}" stroke-opacity="${(.26+.62*(1-i/rings)).toFixed(2)}"/>`;
-      }
-      out += `<rect x="${(w*.18).toFixed(1)}" y="${(h*.33).toFixed(1)}" width="${(w*.64).toFixed(1)}" height="${(h*.22).toFixed(1)}" fill="${C.cream}" opacity=".90"/>`;
-      out += `<text x="${(w*.50).toFixed(1)}" y="${(h*.455).toFixed(1)}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${Math.round(Math.min(w,h)*.060)}" font-weight="800" fill="${C.ink}">COVER</text>`;
-      out += `<text x="${(w*.50).toFixed(1)}" y="${(h*.495).toFixed(1)}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${Math.round(Math.min(w,h)*.060)}" font-weight="800" fill="${C.ink}">DESIGN</text>`;
-      return out;
-    }
-
-    // 05 — Diagonal stripe field.
-    out += `<rect width="${w}" height="${h}" fill="${C.red}"/>`;
-    const stripes=Math.max(16, Math.floor(Number(state.density)*2.2));
-    const stripeH=h*.036;
-    for(let i=-3;i<stripes+3;i++){
-      const y=i*(h/(stripes));
-      const col=[C.pink,C.orange,C.yellow,C.coral,C.rose][i%5];
-      const slant=w*.16;
-      out += `<path d="M ${(w*.02-slant).toFixed(1)} ${(y+stripeH).toFixed(1)} L ${(w*.02).toFixed(1)} ${y.toFixed(1)} L ${(w*.98).toFixed(1)} ${(y.toFixed(1))} L ${(w*.98+slant).toFixed(1)} ${(y+stripeH).toFixed(1)} Z" fill="${col}" opacity=".96"/>`;
-    }
-    out += `<rect x="${(w*.10).toFixed(1)}" y="${(h*.73).toFixed(1)}" width="${(w*.80).toFixed(1)}" height="${(h*.13).toFixed(1)}" rx="${(h*.03).toFixed(1)}" fill="${C.cream}" opacity=".92"/>`;
-    return out;
-  }
-
-
-  function redEditorial(id,w,h,p,rnd,index){
-    // Red/black editorial family inspired by the supplied reference sheet.
-    const s=sizeFactor();
-    const C={
-      black:"#070406",
-      ink:"#16080b",
-      deep:"#26070d",
-      red:"#e3133f",
-      crimson:"#a70d25",
-      ruby:"#7d081d",
-      bright:"#ff5b73",
-      cream:"#fff0d8",
-      white:"#fff8ed"
-    };
-    const shadow=`url(#${id}_shadow)`;
-    const glow=`url(#${id}_glow)`;
-    let out="";
-
-    // 01 — Soft diagonal gradient + stacked curved bands.
-    if(index%5===0){
-      out+=`<rect width="${w}" height="${h}" fill="${C.black}"/>`;
-      out+=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)" opacity=".82"/>`;
-      out+=`<path d="M ${w*.02} ${h*1.02} C ${w*.15} ${h*.83}, ${w*.45} ${h*.73}, ${w*.64} ${h*.48} C ${w*.77} ${h*.31}, ${w*.90} ${h*.14}, ${w*1.02} ${h*.02} L ${w*1.02} ${h*1.05} Z" fill="${C.red}" opacity=".34" filter="${glow}"/>`;
-      const bands=6+Math.floor(Number(state.density)/3);
-      for(let i=0;i<bands;i++){
-        const off=i*(h*.028);
-        const x=w*(.47+i*.035);
-        const y=h*(.71-i*.052);
-        const rx=w*(.19+i*.022);
-        const ry=h*(.11+i*.013);
-        out+=`<path d="M ${(x-rx).toFixed(1)} ${y.toFixed(1)} C ${(x-rx*.42).toFixed(1)} ${(y-ry*.62).toFixed(1)}, ${(x+rx*.45).toFixed(1)} ${(y-ry*.92).toFixed(1)}, ${(x+rx).toFixed(1)} ${(y-ry*1.10).toFixed(1)}" fill="none" stroke="${i%2?C.bright:C.cream}" stroke-width="${Math.max(8,h*.0075).toFixed(1)}" stroke-opacity="${(.22+.08*i).toFixed(2)}" stroke-linecap="round"/>`;
-      }
-      return out;
-    }
-
-    // 02 — Layered fan / folded red waves.
-    if(index%5===1){
-      out+=`<rect width="${w}" height="${h}" fill="${C.black}"/>`;
-      const layers=11+Math.floor(Number(state.density)/2);
-      for(let i=0;i<layers;i++){
-        const x=w*(.10+i*.055);
-        const top=-h*.08+i*h*.012;
-        const span=w*(.82-i*.035);
-        const col=[C.red,C.crimson,C.ruby,C.deep][i%4];
-        out+=`<path d="M ${x.toFixed(1)} ${top.toFixed(1)} C ${(x+span*.18).toFixed(1)} ${(h*.15+i*h*.012).toFixed(1)}, ${(x+span*.12).toFixed(1)} ${(h*.46+i*h*.01).toFixed(1)}, ${(x+span*.40).toFixed(1)} ${(h*1.05).toFixed(1)}
-          L ${(x+span*.08).toFixed(1)} ${h*1.05.toFixed ? "" : ""}`.replace('1.05.toFixed ? "" : ""','1.05') + ` C ${(x+span*.01).toFixed(1)} ${(h*.64+i*h*.005).toFixed(1)}, ${(x-span*.03).toFixed(1)} ${(h*.31+i*h*.004).toFixed(1)}, ${x.toFixed(1)} ${top.toFixed(1)} Z" fill="${col}" opacity="${(.70+.18*(1-i/layers)).toFixed(2)}"/>`;
-      }
-      out+=`<ellipse cx="${(w*.79).toFixed(1)}" cy="${(h*.20).toFixed(1)}" rx="${(w*.28).toFixed(1)}" ry="${(h*.30).toFixed(1)}" fill="${C.red}" opacity=".10" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 03 — Radial red/black rays converging to one point.
-    if(index%5===2){
-      out+=`<rect width="${w}" height="${h}" fill="${C.black}"/>`;
-      const cx=w*(.36+rnd()*.14), cy=h*(.48+rnd()*.05);
-      const rays=16+Math.floor(Number(state.density));
-      for(let i=0;i<rays;i++){
-        const a0=-Math.PI*.92 + (TAU*.72)*(i/rays);
-        const a1=a0 + TAU*.72/rays*.74;
-        const R=Math.max(w,h)*1.35;
-        const x1=cx+Math.cos(a0)*R, y1=cy+Math.sin(a0)*R;
-        const x2=cx+Math.cos(a1)*R, y2=cy+Math.sin(a1)*R;
-        const col=i%3===0?C.red:(i%2?C.crimson:C.deep);
-        out+=`<path d="M ${cx.toFixed(1)} ${cy.toFixed(1)} L ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)} Z" fill="${col}" opacity="${(.42+.34*(i%2)).toFixed(2)}"/>`;
-      }
-      out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(Math.min(w,h)*.035).toFixed(1)}" fill="${C.cream}" opacity=".72" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 04 — Abstract red/black angular shards.
-    if(index%5===3){
-      out+=`<rect width="${w}" height="${h}" fill="${C.black}"/>`;
-      const count=10+Math.floor(Number(state.density));
-      for(let i=0;i<count;i++){
-        const x=w*(rnd()*.85-.02), y=h*(rnd()*.88-.02);
-        const ww=w*(.22+rnd()*.34)*s, hh=h*(.05+rnd()*.14)*s;
-        const rot=(rnd()-.5)*58;
-        const col=i%4===0?C.red:(i%3===0?C.cream:C.crimson);
-        out+=`<polygon points="${(-ww*.5).toFixed(1)},0 ${(ww*.48).toFixed(1)},${(-hh*.32).toFixed(1)} ${(ww*.5).toFixed(1)},${hh.toFixed(1)} ${(-ww*.22).toFixed(1)},${(hh*.52).toFixed(1)}"
-          transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)})" fill="${col}" opacity="${(.54+rnd()*.38).toFixed(2)}"/>`;
-      }
-      out+=`<polygon points="${w*.39},${h*.34} ${w*.64},${h*.29} ${w*.78},${h*.58} ${w*.50},${h*.63} ${w*.29},${h*.48}" fill="${C.ink}" opacity=".78"/>`;
-      return out;
-    }
-
-    // 05 — Dramatic cream/red starburst.
-    out+=`<rect width="${w}" height="${h}" fill="${C.red}"/>`;
-    const cx=w*(.50+rnd()*.04), cy=h*(.39+rnd()*.06);
-    const rays=22+Math.floor(Number(state.density)*1.2);
-    const inner=Math.min(w,h)*.16*s, outer=Math.max(w,h)*1.25;
-    for(let i=0;i<rays;i++){
-      const a0=-Math.PI/2 + TAU*i/rays;
-      const a1=-Math.PI/2 + TAU*(i+1)/rays;
-      const col=i%3===0?C.cream:(i%2?C.red:C.crimson);
-      const pts=`${cx.toFixed(1)},${cy.toFixed(1)} ${(cx+Math.cos(a0)*outer).toFixed(1)},${(cy+Math.sin(a0)*outer).toFixed(1)} ${(cx+Math.cos(a1)*outer).toFixed(1)},${(cy+Math.sin(a1)*outer).toFixed(1)}`;
-      out+=`<polygon points="${pts}" fill="${col}" opacity="${(.55+.38*(i%2===0)).toFixed(2)}"/>`;
-    }
-    out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${inner.toFixed(1)}" fill="${C.cream}" opacity=".97" filter="${shadow}"/>`;
-    out+=`<ellipse cx="${(cx-w*.05).toFixed(1)}" cy="${(cy-h*.06).toFixed(1)}" rx="${(inner*.45).toFixed(1)}" ry="${(inner*.24).toFixed(1)}" fill="#fff" opacity=".38" filter="${glow}"/>`;
-    return out;
-  }
-
-
-  function cyanGeometric(id,w,h,p,rnd,index){
-    // Cyan/sky-blue geometric editorial family inspired by the supplied reference.
-    const s=sizeFactor();
-    const C={
-      navy:"#07151d",
-      blue:"#299dcc",
-      cyan:"#55cbea",
-      ice:"#dff6f4",
-      white:"#f6ffff",
-      violet:"#8f83cf",
-      lilac:"#c9b6d6",
-      orange:"#ef6f1b",
-      yellow:"#ffd452",
-      peach:"#f5bd96",
-      deep:"#124b72"
-    };
-    const shadow=`url(#${id}_shadow)`;
-    const glow=`url(#${id}_glow)`;
-    let out="";
-
-    // 01 — Modular translucent blocks.
-    if(index%5===0){
-      out+=`<rect width="${w}" height="${h}" fill="${C.ice}"/>`;
-      const cols=6, rows=9;
-      const cw=w/cols, rh=h/rows;
-      for(let r=0;r<rows;r++){
-        for(let c=0;c<cols;c++){
-          if((r+c+index)%3===0){
-            const x=c*cw + cw*.04, y=r*rh + rh*.03;
-            const ww=cw*(.82+rnd()*.12), hh=rh*(.72+rnd()*.20);
-            const palette=[C.cyan,C.blue,C.violet,C.lilac,C.white,C.yellow];
-            const fill=palette[(r*cols+c+index)%palette.length];
-            out+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${ww.toFixed(1)}" height="${hh.toFixed(1)}"
-              fill="${fill}" opacity="${(.36+.46*rnd()).toFixed(2)}"/>`;
-          }
-        }
-      }
-      out+=`<rect x="${(w*.14).toFixed(1)}" y="${(h*.12).toFixed(1)}" width="${(w*.16).toFixed(1)}" height="${(h*.20).toFixed(1)}" fill="${C.yellow}" opacity=".92"/>`;
-      out+=`<rect x="${(w*.15).toFixed(1)}" y="${(h*.24).toFixed(1)}" width="${(w*.13).toFixed(1)}" height="${(h*.17).toFixed(1)}" fill="${C.orange}" opacity=".90"/>`;
-      out+=`<rect x="${(w*.61).toFixed(1)}" y="${(h*.67).toFixed(1)}" width="${(w*.26).toFixed(1)}" height="${(h*.18).toFixed(1)}" fill="${C.orange}" opacity=".88"/>`;
-      out+=`<ellipse cx="${w*.52}" cy="${h*.46}" rx="${w*.28}" ry="${h*.22}" fill="${C.white}" opacity=".14" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 02 — Tall vertical translucent prism columns.
-    if(index%5===1){
-      out+=`<rect width="${w}" height="${h}" fill="${C.ice}"/>`;
-      const bars=7+Math.floor(Number(state.density)/3);
-      for(let i=0;i<bars;i++){
-        const x=w*(.06+i*.115)+(rnd()-.5)*w*.02;
-        const bw=w*(.12+rnd()*.06);
-        const top=h*(.03+rnd()*.08);
-        const bottom=h*(.92-rnd()*.06);
-        const col=[C.white,C.lilac,C.violet,C.cyan,C.blue,C.deep][i%6];
-        out+=`<polygon points="${x.toFixed(1)},${top.toFixed(1)} ${(x+bw).toFixed(1)},${(top+rhSafe(h)).toFixed(1)} ${(x+bw).toFixed(1)},${bottom.toFixed(1)} ${(x-bw*.05).toFixed(1)},${(bottom-h*.06).toFixed(1)} ${(x-bw*.02).toFixed(1)},${top.toFixed(1)}" fill="${col}" opacity="${(.44+.34*(i%3)/2).toFixed(2)}"/>`;
-      }
-      out+=`<path d="M ${w*.02} ${h*.18} L ${w*.98} ${h*.07} L ${w*.98} ${h*.34} L ${w*.02} ${h*.45} Z" fill="${C.cyan}" opacity=".10"/>`;
-      out+=`<ellipse cx="${w*.55}" cy="${h*.42}" rx="${w*.22}" ry="${h*.32}" fill="${C.white}" opacity=".10" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 03 — Faceted radial abstract polygon.
-    if(index%5===2){
-      out+=`<rect width="${w}" height="${h}" fill="${C.ice}"/>`;
-      const cx=w*(.49+rnd()*.05), cy=h*(.49+rnd()*.05);
-      const R=Math.max(w,h)*.50;
-      const n=9;
-      const palette=[C.orange,C.yellow,C.cyan,C.white,C.violet,C.blue,C.peach];
-      const angles=[];
-      for(let i=0;i<=n;i++) angles.push(-Math.PI*.72 + i*(Math.PI*1.45/n));
-      for(let i=0;i<n;i++){
-        const a0=angles[i], a1=angles[i+1];
-        const x0=cx+Math.cos(a0)*R, y0=cy+Math.sin(a0)*R;
-        const x1=cx+Math.cos(a1)*R, y1=cy+Math.sin(a1)*R;
-        const col=palette[(i+index)%palette.length];
-        out+=`<polygon points="${cx.toFixed(1)},${cy.toFixed(1)} ${x0.toFixed(1)},${y0.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}" fill="${col}" opacity="${(.60+.34*rnd()).toFixed(2)}"/>`;
-      }
-      out+=`<polygon points="${(cx-w*.09).toFixed(1)},${(cy-h*.19).toFixed(1)} ${ (cx+w*.08).toFixed(1)},${(cy-h*.27).toFixed(1)} ${ (cx+w*.20).toFixed(1)},${(cy+h*.10).toFixed(1)} ${ (cx-w*.08).toFixed(1)},${(cy+h*.22).toFixed(1)}" fill="${C.white}" opacity=".92"/>`;
-      out+=`<ellipse cx="${cx}" cy="${cy}" rx="${w*.15}" ry="${h*.08}" fill="${C.white}" opacity=".12" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 04 — Curved layered gradient ribbons.
-    if(index%5===3){
-      out+=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)" opacity=".86"/>`;
-      const bands=7+Math.floor(Number(state.density)/2);
-      for(let i=0;i<bands;i++){
-        const yy=h*(.18+i*.105);
-        const amp=h*(.08+i*.006);
-        const col=[C.orange,C.peach,C.yellow,C.cyan,C.blue,C.violet][i%6];
-        out+=`<path d="M ${-w*.08} ${yy.toFixed(1)} C ${w*.25} ${(yy-amp).toFixed(1)}, ${w*.62} ${(yy+amp).toFixed(1)}, ${w*1.08} ${(yy-amp*.38).toFixed(1)} L ${w*1.08} ${(yy+amp*.30).toFixed(1)} C ${w*.62} ${(yy+amp*1.28).toFixed(1)}, ${w*.25} ${(yy+amp*.18).toFixed(1)}, ${-w*.08} ${(yy+amp*.48).toFixed(1)} Z" fill="${col}" opacity="${(.33+.07*(i%4)).toFixed(2)}"/>`;
-      }
-      out+=`<ellipse cx="${w*.64}" cy="${h*.38}" rx="${w*.30}" ry="${h*.18}" fill="${C.yellow}" opacity=".08" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 05 — Nested semicircular warm/cool gradient arches.
-    out+=`<rect width="${w}" height="${h}" fill="${C.ice}"/>`;
-    const cx=w*.50, base=h*.72;
-    const arches=6+Math.floor(Number(state.density)/2);
-    for(let i=0;i<arches;i++){
-      const rw=w*(.46+i*.055)*s;
-      const rh=h*(.16+i*.045)*s;
-      const col=i%2===0?C.orange:C.yellow;
-      out+=`<path d="M ${(cx-rw).toFixed(1)} ${base.toFixed(1)} Q ${cx.toFixed(1)} ${(base-rh*1.95).toFixed(1)} ${(cx+rw).toFixed(1)} ${base.toFixed(1)}" fill="none"
-        stroke="${col}" stroke-width="${Math.max(18,h*.028).toFixed(1)}" stroke-opacity="${(.30+.52*(1-i/arches)).toFixed(2)}" stroke-linecap="round"/>`;
-    }
-    out+=`<path d="M 0 ${h*.30} C ${w*.20} ${h*.12}, ${w*.55} ${h*.08}, ${w} ${h*.28}" fill="none" stroke="${C.cyan}" stroke-width="${Math.max(28,h*.045)}" stroke-opacity=".42"/>`;
-    out+=`<ellipse cx="${w*.50}" cy="${h*.68}" rx="${w*.28}" ry="${h*.10}" fill="${C.white}" opacity=".12" filter="${glow}"/>`;
-    return out;
-  }
-
-  function rhSafe(h){ return h*.20; }
-
-
-  function hashString(str){ let h=2166136261; for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);} return h>>>0; }
-
-  function catalogPalette(mode,index){
-    const keys=Object.keys(THEMES), h=hashString(mode+":"+(Number(state.seed)||1)+":"+index);
-    const t1=THEMES[keys[h%keys.length]], t2=THEMES[keys[(h>>>8)%keys.length]];
-    const warm=/pastel|retro|vintage|memphis|playful|fashion|floral|botanical|tropical|luxury|ornament|art deco|art nouveau|moroccan|islamic/i.test(mode);
-    const dark=/luxury|bold|modern|abstract|experimental|synthwave|vaporwave|cyber|ink|stone|marble|tech|futuristic/i.test(mode);
-    const bias=warm?.24:dark?.42:.18;
-    return {dark:mixHex(t1.dark,t2.dark,bias),mid:mixHex(t1.mid,t2.mid,.28),a:mixHex(t1.a,t2.a,.35),b:mixHex(t1.b,t2.b,.30),light:mixHex(t1.light,t2.light,.20),text:dark?"#ffffff":(warm?"#44252c":"#ffffff")};
-  }
-
-  function catalogArchetype(mode){
-    const low=mode.toLowerCase();
-    if(/bubble/.test(low)) return "rings";
-    if(/blobs|liquid|marble|fluid|ink|paint|organic|biomorphic|dreamy|natural/.test(low)) return "blobs";
-    if(/petal|floral|botanical|leaf|tropical|nature/.test(low)) return "petals";
-    if(/mandala|sacred|kaleidoscope|radial|circular|concentric|ornamental|decorative|symmetrical/.test(low)) return "radial";
-    if(/halftone|dot|polka|grid|checker|pattern|line pattern|wave pattern|spiral|seamless/.test(low)) return "pattern";
-    if(/geometry|geometric|prism|layers|collage|shapes|color block|art deco|moroccan|islamic|memphis|y2k|tech|futuristic/.test(low)) return "geometry";
-    if(/wave|gradient|vaporwave|synthwave|cyber/.test(low)) return "waves";
-    if(/soft|minimal/.test(low)) return "minimal";
-    return "abstract";
-  }
-
-  function catalogDesign(id,w,h,p,rnd,index,mode){
-    const s=sizeFactor(), min=Math.min(w,h), deep=state.depth==="3d";
-    const shadow=`url(#${id}_shadow)`, glow=`url(#${id}_glow)`;
-    const A=p.a,B=p.b,L=p.light,D=p.dark,M=p.mid;
-    const type=catalogArchetype(mode);
-    let out=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)"/>`;
-    const k=hashString(mode+index);
-
-    if(type==="rings"){
-      out=`<rect width="${w}" height="${h}" fill="${L}"/>`;
-      const count=3+(k%3);
-      for(let n=0;n<count;n++){
-        const cx=w*(.17+((k>>(n%8))%70)/100), cy=h*(.18+((k>>(n%6))%65)/100), R=min*(.08+((k>>(n+3)%10)%13)/100)*s;
-        for(let j=0;j<9;j++){
-          const rr=R*(1-j*.085), c=[A,B,M,L][(j+n)%4];
-          out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rr.toFixed(1)}" fill="none" stroke="${c}" stroke-width="${Math.max(6,rr*.14).toFixed(1)}" opacity="${(.28+.62*(1-j/9)).toFixed(2)}"/>`;
-        }
-      }
-    } else if(type==="blobs"){
-      const count=5+(k%5); out+=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)"/>`;
-      for(let i=0;i<count;i++){
-        const x=w*(.10+rnd()*.80), y=h*(.10+rnd()*.78), rx=w*(.08+rnd()*.19)*s, ry=h*(.05+rnd()*.14)*s;
-        const d=`M ${x-rx} ${y} C ${x-rx*.78} ${y-ry*1.15}, ${x-rx*.10} ${y-ry*.84}, ${x+rx} ${y-ry*.08} C ${x+rx*.72} ${y+ry*1.1}, ${x-rx*.05} ${y+ry*.92}, ${x-rx} ${y} Z`;
-        out+=`<path d="${d}" fill="${i%2?`url(#${id}_hero)`:A}" opacity=".88" filter="${shadow}"/>`;
-        if(deep) out+=`<ellipse cx="${(x-rx*.25).toFixed(1)}" cy="${(y-ry*.25).toFixed(1)}" rx="${(rx*.24).toFixed(1)}" ry="${(ry*.18).toFixed(1)}" fill="#fff" opacity=".30" filter="${glow}"/>`;
-      }
-    } else if(type==="petals"){
-      out=`<rect width="${w}" height="${h}" fill="${L}"/>`;
-      const cx=w*(.50+(rnd()-.5)*.10), cy=h*(.50+(rnd()-.5)*.10), R=min*.26*s, n=6+(k%5);
-      for(let i=0;i<n;i++){
-        const ang=i*TAU/n, x=cx+Math.cos(ang)*R*.56, y=cy+Math.sin(ang)*R*.56, rx=R*(.58+rnd()*.20), ry=R*(.18+rnd()*.10), c=i%2?A:B;
-        out+=`<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" transform="rotate(${(ang*180/Math.PI).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="${c}" opacity=".80" filter="${shadow}"/>`;
-      }
-      out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(R*.34).toFixed(1)}" fill="${L}" opacity=".94" filter="${glow}"/>`;
-    } else if(type==="radial"){
-      out=`<rect width="${w}" height="${h}" fill="${D}"/>`;
-      const cx=w*(.45+rnd()*.10),cy=h*(.42+rnd()*.18),n=12+(k%10),R=Math.max(w,h)*1.25,pal=[A,B,M,L];
-      for(let i=0;i<n;i++){
-        const a0=-Math.PI*.9+TAU*i/n,a1=a0+TAU/n*.88,c=pal[i%pal.length];
-        out+=`<path d="M ${cx.toFixed(1)} ${cy.toFixed(1)} L ${(cx+Math.cos(a0)*R).toFixed(1)} ${(cy+Math.sin(a0)*R).toFixed(1)} L ${(cx+Math.cos(a1)*R).toFixed(1)} ${(cy+Math.sin(a1)*R).toFixed(1)} Z" fill="${c}" opacity="${(.30+.48*(i%3===0)).toFixed(2)}"/>`;
-      }
-      out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(min*.05*s).toFixed(1)}" fill="${L}" opacity=".85" filter="${glow}"/>`;
-    } else if(type==="pattern"){
-      out=`<rect width="${w}" height="${h}" fill="${D}"/>`;
-      const n=9+(k%5), gap=w/n, rh=h/n, pal=[A,B,M,L];
-      for(let r=0;r<n;r++) for(let c=0;c<n;c++){
-        const choose=(r+c+(k%5))%3!==0; if(!choose) continue;
-        const x=c*gap,y=r*rh; const fill=pal[(r*3+c+k)%pal.length];
-        out+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(gap*.84).toFixed(1)}" height="${(rh*.84).toFixed(1)}" rx="${Math.min(24,rh*.12).toFixed(1)}" fill="${fill}" opacity="${(.22+.68*((r+c)%5)/4).toFixed(2)}"/>`;
-      }
-      if(/line|wave|spiral/.test(mode.toLowerCase())){
-        for(let i=0;i<7;i++){ const y=h*(.12+i*.12); out+=`<path d="M 0 ${y.toFixed(1)} Q ${(w*.5).toFixed(1)} ${(y-h*.05).toFixed(1)} ${w.toFixed(1)} ${(y+h*.025).toFixed(1)}" fill="none" stroke="${i%2?L:A}" stroke-width="${Math.max(2,min*.0025)}" opacity=".52"/>`; }
-      }
-    } else if(type==="geometry"){
-      out=`<rect width="${w}" height="${h}" fill="${D}"/>`;
-      const count=8+(k%8), pal=[A,B,M,L];
-      for(let i=0;i<count;i++){
-        const cx=w*(.08+rnd()*.82),cy=h*(.08+rnd()*.82),rw=min*(.05+rnd()*.13)*s,rh=rw*(.55+rnd()*.95),rot=(rnd()-.5)*50, c=pal[i%pal.length];
-        const pts=`${(-rw).toFixed(1)},0 ${(rw*.75).toFixed(1)},${(-rh).toFixed(1)} ${(rw).toFixed(1)},0 ${(rw*.28).toFixed(1)},${rh.toFixed(1)} ${(-rw*.68).toFixed(1)},${(rh*.58).toFixed(1)}`;
-        out+=`<polygon points="${pts}" transform="translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${rot.toFixed(1)})" fill="${c}" opacity="${(.48+rnd()*.42).toFixed(2)}" filter="${shadow}"/>`;
-      }
-    } else if(type==="waves"){
-      out=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)"/>`;
-      const lines=7+(k%7); for(let j=0;j<lines;j++){
-        const y=h*(.10+j*.12), amp=h*(.025+.02*rnd()), pts=[];
-        for(let i=0;i<=22;i++){const x=w*i/22, yy=y+Math.sin(i*.48+j*.7+k*.001)*amp*(.8+rnd());pts.push(`${x.toFixed(1)},${yy.toFixed(1)}`)}
-        out+=`<polyline points="${pts.join(' ')}" fill="none" stroke="${j%2?B:L}" stroke-width="${Math.max(5,min*.007)}" opacity="${(.36+j*.045).toFixed(2)}"/>`;
-      }
-    } else if(type==="minimal"){
-      out=`<rect width="${w}" height="${h}" fill="${L}"/>`;
-      const n=3+(k%4); for(let i=0;i<n;i++){
-        const x=w*(.15+rnd()*.55), y=h*(.17+rnd()*.62), ww=w*(.16+rnd()*.30)*s, hh=h*(.07+rnd()*.16)*s, c=i%2?A:B;
-        out+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${ww.toFixed(1)}" height="${hh.toFixed(1)}" rx="${Math.min(60,hh*.35).toFixed(1)}" transform="rotate(${((rnd()-.5)*22).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="${c}" opacity=".82" filter="${shadow}"/>`;
-      }
-    } else { // abstract
-      out=`<rect width="${w}" height="${h}" fill="url(#${id}_bg)"/>`;
-      const n=10+(k%8); for(let i=0;i<n;i++){
-        const cx=w*(.06+rnd()*.88),cy=h*(.06+rnd()*.88),r=min*(.025+rnd()*.11)*s,c=i%2?A:B;
-        out+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" opacity="${(.25+.55*rnd()).toFixed(2)}" filter="${shadow}"/>`;
-      }
-      out+=`<path d="M 0 ${h*.72} C ${w*.22} ${h*.44}, ${w*.60} ${h*.94}, ${w} ${h*.20}" fill="none" stroke="${L}" stroke-opacity=".34" stroke-width="${Math.max(20,min*.028)}" filter="${glow}"/>`;
-    }
-    return out;
-  }
-
-
-  function neonEditorialReference(id,w,h,p,rnd,index){
-    const C={
-      black:"#030407", deep:"#10061a", violet:"#5b43ff", purple:"#a340ff",
-      magenta:"#ff2b9b", pink:"#ff63d2", coral:"#ff5a68", orange:"#ff8a42",
-      blue:"#4b7cff", cyan:"#55ddff", white:"#fff8ff"
-    };
-    const s=sizeFactor(), soft=`url(#${id}_soft)`, shadow=`url(#${id}_shadow)`, glow=`url(#${id}_glow)`;
-    let out=`<rect width="${w}" height="${h}" fill="${C.black}"/>`;
-
-    // 1. Large luminous oval.
-    if(index%5===0){
-      const cx=w*(.49+rnd()*.08), cy=h*(.38+rnd()*.12);
-      out+=`<ellipse cx="${(cx-w*.02).toFixed(1)}" cy="${(cy+h*.02).toFixed(1)}"
-        rx="${(w*.37*s).toFixed(1)}" ry="${(h*.23*s).toFixed(1)}"
-        fill="url(#${id}_orb)" opacity=".95" filter="${soft}" transform="rotate(-17 ${cx.toFixed(1)} ${cy.toFixed(1)})"/>`;
-      out+=`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}"
-        rx="${(w*.29*s).toFixed(1)}" ry="${(h*.17*s).toFixed(1)}"
-        fill="url(#${id}_hero)" opacity=".95" filter="${shadow}" transform="rotate(-17 ${cx.toFixed(1)} ${cy.toFixed(1)})"/>`;
-      out+=`<ellipse cx="${(cx-w*.07).toFixed(1)}" cy="${(cy-h*.03).toFixed(1)}"
-        rx="${(w*.13*s).toFixed(1)}" ry="${(h*.075*s).toFixed(1)}"
-        fill="${C.white}" opacity=".14" filter="${glow}" transform="rotate(-17 ${cx.toFixed(1)} ${cy.toFixed(1)})"/>`;
-      out+=`<ellipse cx="${w*.29}" cy="${h*.84}" rx="${w*.27}" ry="${h*.095}"
-        fill="url(#${id}_hero)" opacity=".76" transform="rotate(-23 ${w*.29} ${h*.84})" filter="${soft}"/>`;
-      out+=`<circle cx="${w*.79}" cy="${h*.20}" r="${Math.min(w,h)*.11}" fill="${C.cyan}" opacity=".14" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 2. Sharp diagonal neon ribbons with black channels.
-    if(index%5===1){
-      const count=Math.max(8,Math.floor(Number(state.density)*1.15));
-      for(let i=0;i<count;i++){
-        const x=-w*.18+i*(w*.94/count);
-        const width=w*(.105+.018*rnd())*s;
-        const top=-h*.02+i*h*.045;
-        const col=[C.violet,C.purple,C.magenta,C.pink,C.coral,C.orange][i%6];
-        out+=`<path d="M ${(x-width*.10).toFixed(1)} ${h*1.04}
-          L ${(x+width*.66).toFixed(1)} ${h*1.04}
-          L ${(x+width*1.72).toFixed(1)} ${top.toFixed(1)}
-          L ${(x+width*.78).toFixed(1)} ${top.toFixed(1)} Z"
-          fill="${col}" opacity="${(.58+.30*rnd()).toFixed(2)}" filter="${i%3===0?soft:""}"/>`;
-      }
-      for(let i=0;i<count-1;i++){
-        const x=w*(.10+i*.105);
-        out+=`<path d="M ${x.toFixed(1)} ${h*1.03} L ${(x+w*.07).toFixed(1)} ${h*1.03} L ${(x+w*.30).toFixed(1)} 0 L ${(x+w*.23).toFixed(1)} 0 Z" fill="${C.black}" opacity=".74"/>`;
-      }
-      out+=`<path d="M ${w*.53} 0 L ${w*1.02} 0 L ${w*.53} ${h*.42} Z" fill="${C.orange}" opacity=".27" filter="${soft}"/>`;
-      return out;
-    }
-
-    // 3. Soft diagonal glowing light trails.
-    if(index%5===2){
-      const curves=[
-        [`M ${-w*.12} ${h*.18} C ${w*.18} ${h*.02}, ${w*.56} ${h*.25}, ${w*1.10} ${h*.03}`,C.magenta,.74],
-        [`M ${-w*.12} ${h*.49} C ${w*.20} ${h*.29}, ${w*.60} ${h*.66}, ${w*1.10} ${h*.40}`,C.orange,.58],
-        [`M ${-w*.10} ${h*.82} C ${w*.22} ${h*.58}, ${w*.66} ${h*.94}, ${w*1.08} ${h*.68}`,C.violet,.56]
-      ];
-      curves.forEach((q,i)=>{
-        out+=`<path d="${q[0]}" fill="none" stroke="${q[1]}" stroke-width="${Math.max(36,h*.085*s).toFixed(1)}"
-          stroke-linecap="round" opacity="${q[2]}" filter="${soft}"/>`;
-        out+=`<path d="${q[0]}" fill="none" stroke="${i===1?C.pink:C.white}" stroke-width="${Math.max(6,h*.014*s).toFixed(1)}"
-          stroke-linecap="round" opacity="${(.22+i*.05).toFixed(2)}" filter="${glow}"/>`;
-      });
-      out+=`<ellipse cx="${w*.48}" cy="${h*.42}" rx="${w*.34}" ry="${h*.18}" fill="${C.magenta}" opacity=".12" filter="${soft}"/>`;
-      return out;
-    }
-
-    // 4. Intersecting glowing disks and black negative-space cutout.
-    if(index%5===3){
-      const r=Math.min(w,h)*.21*s;
-      const x1=w*.30,y1=h*.40,x2=w*.64,y2=h*.28;
-      out+=`<circle cx="${x1}" cy="${y1}" r="${r}" fill="url(#${id}_orb)" opacity=".90" filter="${shadow}"/>`;
-      out+=`<circle cx="${x2}" cy="${y2}" r="${r*1.13}" fill="url(#${id}_hero)" opacity=".78" filter="${shadow}"/>`;
-      out+=`<circle cx="${w*.72}" cy="${h*.66}" r="${r*1.06}" fill="${C.black}"/>`;
-      out+=`<circle cx="${w*.72}" cy="${h*.66}" r="${r*1.16}" fill="none" stroke="${C.coral}" stroke-width="${Math.max(7,w*.006)}"
-        stroke-opacity=".34" filter="${soft}"/>`;
-      out+=`<circle cx="${w*.49}" cy="${h*.44}" r="${r*.70}" fill="none" stroke="${C.orange}" stroke-width="${Math.max(3,w*.003)}" stroke-opacity=".55"/>`;
-      out+=`<ellipse cx="${w*.33}" cy="${h*.43}" rx="${r*.55}" ry="${r*.27}" fill="${C.cyan}" opacity=".20" filter="${glow}"/>`;
-      return out;
-    }
-
-    // 5. Luminous editorial grid.
-    const cols=6, rows=10, cw=w/cols, rh=h/rows;
-    const colors=[C.magenta,C.purple,C.violet,C.blue,C.cyan,C.coral,C.orange,C.pink];
-    for(let r=0;r<rows;r++){
-      for(let c=0;c<cols;c++){
-        const strong=(r+c+index)%3!==1 || (c===1&&r>4) || (c===4&&r<6);
-        if(!strong) continue;
-        const x=c*cw+cw*.05, y=r*rh+rh*.04;
-        const ww=cw*(.70+.18*rnd()), hh=rh*(.68+.18*rnd());
-        const col=colors[(r*cols+c+index)%colors.length];
-        out+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${ww.toFixed(1)}" height="${hh.toFixed(1)}"
-          fill="${col}" opacity="${(.38+.50*rnd()).toFixed(2)}"/>`;
-      }
-    }
-    out+=`<rect x="${w*.15}" y="${h*.09}" width="${w*.12}" height="${h*.78}" fill="${C.violet}" opacity=".25" filter="${soft}"/>`;
-    out+=`<rect x="${w*.46}" y="${h*.20}" width="${w*.11}" height="${h*.59}" fill="${C.magenta}" opacity=".24" filter="${soft}"/>`;
-    out+=`<rect x="${w*.70}" y="${h*.62}" width="${w*.20}" height="${h*.09}" fill="${C.orange}" opacity=".38" filter="${glow}"/>`;
-    return out;
-  }
-
-  function layoutByMode(index,w,h,p,rnd,id){
-    const mode = state.designMode;
-    if(mode === "neonEditorial") return neonEditorialReference(id,w,h,p,rnd,index);
-    if(mode === "liquid") return liquid(id,w,h,p,rnd);
-    if(mode === "glass") return spheres(id,w,h,p,rnd);
-    if(mode === "prism") return prisms(id,w,h,p,rnd);
-    if(mode === "organic") return petals(id,w,h,p,rnd);
-    if(mode === "waves") return waves(id,w,h,p,rnd);
-    if(mode === "minimal") return minimal(id,w,h,p,rnd);
-    if(mode === "blueEditorial") return referenceEditorial(id,w,h,p,rnd,index);
-    if(mode === "pastelEditorial") return pastelEditorial(id,w,h,p,rnd,index);
-    if(mode === "redEditorial") return redEditorial(id,w,h,p,rnd,index);
-    if(mode === "cyanGeometric") return cyanGeometric(id,w,h,p,rnd,index);
-    if(mode.startsWith("catalog_")){ const label=document.querySelector(`#designMode option[value="${mode}"]`)?.textContent || mode; return catalogDesign(id,w,h,catalogPalette(label,index),rnd,index,label); }
-    const options=[circleGrid,ribbonBars,spheres,prisms,petals,waves,liquid,minimal];
-    const fn=options[index%options.length];
-    return fn(id,w,h,p,rnd);
-  }
-
-  function textLayer(id,index,w,h,p){
-    const amount=Number(state.textAmount)/100;
-    if(amount<=0) return "";
-    const catalogLabel = state.designMode.startsWith("catalog_") ? (document.querySelector(`#designMode option[value="${state.designMode}"]`)?.textContent || "ABSTRACT") : "";
-    const titles = state.designMode === "neonEditorial" ? ["DESIGN","GRADIENT DESIGN","ABSTRACT","INSPIRATION","MODERN ART","VISUAL FORM"] : ["DESIGN","GRADIENT DESIGN","ABSTRACT","INSPIRATION","MODERN ART","VISUAL FORM"];    const title=titles[index%titles.length];
-    const fs=Math.max(18,Math.round(Math.min(w,h)*.026));
-    const sub=["EDITORIAL STUDY","NEON SYSTEM","GRADIENT SERIES","FORM / LIGHT","VISUAL STUDY"][index%5];    const fill=index%4===1?"#081019":"#ffffff";
-    return `<g font-family="Arial, Helvetica, sans-serif" fill="${fill}" opacity="${(.68+.28*amount).toFixed(2)}">
-      <text x="${(w*.08).toFixed(1)}" y="${(h*.10).toFixed(1)}" font-size="${fs}" font-weight="800" letter-spacing="${Math.max(2,fs*.18).toFixed(1)}">${esc(title)}</text>
-      <text x="${(w*.08).toFixed(1)}" y="${(h*.13).toFixed(1)}" font-size="${Math.round(fs*.38)}" letter-spacing="${Math.max(1,fs*.07).toFixed(1)}">${esc(sub)}</text>
-      <text x="${(w*.08).toFixed(1)}" y="${(h*.92).toFixed(1)}" font-size="${Math.round(fs*.34)}" font-weight="700" letter-spacing="${Math.max(1,fs*.08).toFixed(1)}">ALI STUDIO / ${String(index+1).padStart(2,"0")}</text>
-      <text x="${(w*.08).toFixed(1)}" y="${(h*.946).toFixed(1)}" font-size="${Math.round(fs*.25)}" letter-spacing="${Math.max(1,fs*.055).toFixed(1)}">${state.depth === "3d" ? "DIMENSIONAL COLOR SERIES" : "VIBRANT COLOR SERIES"}</text>
-    </g>`;
-  }
-
-  function makeSvg(index){
-    const {w,h}=dims();
-    const rnd=mulberry32((Number(state.seed)||1)+index*7919);
-    const p=palette(index);
-    const id=`ali_${Number(state.seed)||1}_${index}`;
-    let out=commonDefs(id,p,rnd);
-    out += `<rect width="${w}" height="${h}" fill="url(#${id}_bg)"/>`;
-    if(state.depth === "3d"){
-      out += `<ellipse cx="${(w*.50).toFixed(1)}" cy="${(h*.58).toFixed(1)}" rx="${(w*.36).toFixed(1)}" ry="${(h*.20).toFixed(1)}" fill="#000" opacity=".16" filter="url(#${id}_soft)"/>`;
-      out += `<circle cx="${(w*.83).toFixed(1)}" cy="${(h*.16).toFixed(1)}" r="${(Math.min(w,h)*.09).toFixed(1)}" fill="${p.light}" opacity=".18" filter="url(#${id}_glow)"/>`;
-    }
-    out += layoutByMode(index,w,h,p,rnd,id);
-    out = addLight(out,id,w,h,rnd,p);
-    out += textLayer(id,index,w,h,p);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-      <title>ALI STUDIO — NEON GRADIENT EDITORIAL ${state.depth === "3d" ? "3D" : "FLAT"} DESIGN ${String(index+1).padStart(2,"0")}</title>
-      <metadata>Generated locally by ALI STUDIO. All visible artwork is SVG.</metadata>
-      ${out}
-    </svg>`;
-  }
-
-  function makeCombinedSvg(){
-    const {w:pw,h:ph}=dims();
-    const count=Number(state.posterCount), cols=Math.min(4,Math.max(1,count)), rows=Math.ceil(count/cols), gap=36;
-    const aw=pw*cols+gap*(cols+1), ah=ph*rows+gap*(rows+1);
-    let out=`<svg xmlns="http://www.w3.org/2000/svg" width="${aw}" height="${ah}" viewBox="0 0 ${aw} ${ah}">
-      <title>ALI STUDIO — NEON GRADIENT EDITORIAL COLLECTION</title><rect width="${aw}" height="${ah}" fill="#e7e9f0"/>`;
-    for(let i=0;i<count;i++){
-      const x=gap+(i%cols)*(pw+gap), y=gap+Math.floor(i/cols)*(ph+gap);
-      const svg=makeSvg(i).replace(/^<svg[^>]*>/,"").replace(/<\/svg>\s*$/i,"");
-      out += `<g id="design_${String(i+1).padStart(2,"0")}" transform="translate(${x} ${y})">${svg}</g>`;
-    }
-    return out+"</svg>";
-  }
-
-  function download(filename,content,mime="image/svg+xml"){
-    const blob=new Blob([content],{type:mime}), a=document.createElement("a");
-    a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-  }
-
-  async function copyText(text){
-    try{await navigator.clipboard.writeText(text); alert("SVG copied to clipboard.");}
-    catch{const ta=document.createElement("textarea");ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();alert("SVG copied to clipboard.");}
-  }
-
-  function readControls(){
-    ["posterCount","shapeSize","density","gradientSoftness","spacing","edgeFade","textAmount"].forEach(k=>state[k]=Number($(k).value));
-    ["designMode","theme","format","quality","darkColor","lightColor","seed"].forEach(k=>state[k]=$(k).value);
-    state.seed=Number(state.seed)||1;
-    state.depth=document.querySelector(".segment.active")?.dataset.depth || state.depth;
-  }
-
-  function updateOutputs(){
-    const map={posterCount:["posterCountVal",v=>v],shapeSize:["shapeSizeVal",v=>`${v}%`],density:["densityVal",v=>v],gradientSoftness:["gradientSoftnessVal",v=>`${v}%`],spacing:["spacingVal",v=>`${v}%`],edgeFade:["edgeFadeVal",v=>`${v}%`],textAmount:["textAmountVal",v=>`${v}%`]};
-    Object.entries(map).forEach(([id,[oid,fn]])=>$(oid).textContent=fn($(id).value));
-    $("collectionCount").textContent=$("posterCount").value;
-    const modeLabel=$("designMode").selectedOptions[0]?.textContent || "VIBRANT GENERATOR";
-    $("workspaceTitle").textContent=modeLabel.toUpperCase();
-    $("statusMode").textContent=state.depth === "3d" ? "3D DEPTH GENERATOR" : "VIBRANT GENERATOR";
-    $("statusText").textContent=state.depth === "3d" ? "Editable light + depth effects enabled" : "Unique look for every poster";
-    $("workspaceSubtitle").textContent = state.depth === "3d" ? "Each design gets a different dimensional composition with editable SVG lighting." : "Every card gets a different composition and coordinated color palette.";
-  }
-
-  function render(){
-    readControls(); updateOutputs(); generated=[];
-    const grid=$("posterGrid"); grid.innerHTML="";
-    const tpl=$("posterTemplate");
-    for(let i=0;i<state.posterCount;i++){
-      const node=tpl.content.firstElementChild.cloneNode(true), svg=makeSvg(i);
-      generated.push(svg);
-      node.querySelector(".poster-number").textContent=`DESIGN ${String(i+1).padStart(2,"0")}`;
-      node.querySelector(".poster-mode").textContent=`${state.depth.toUpperCase()} / ${String(i+1).padStart(2,"0")}`;
-      node.querySelector(".poster-frame").innerHTML=svg;
-      node.querySelector(".download-one").addEventListener("click",()=>download(`ali-studio-${state.theme}-${state.depth}-${String(i+1).padStart(2,"0")}.svg`,svg));
-      node.querySelector(".copy-one").addEventListener("click",()=>copyText(svg));
-      grid.appendChild(node);
-    }
-    grid.style.gridTemplateColumns=`repeat(${Math.min(4,state.posterCount)},minmax(0,1fr))`;
-    applyZoom();
-  }
-
-  function applyZoom(){ $("posterGrid").style.transform=`scale(${zoom})`; $("zoomLabel").textContent=`${Math.round(zoom*100)}%`; }
-
-  ["posterCount","designMode","theme","shapeSize","density","gradientSoftness","spacing","edgeFade","textAmount","seed","format","quality","darkColor","lightColor"].forEach(id=>{
-    $(id).addEventListener("input",()=>{updateOutputs();render();});
-    $(id).addEventListener("change",()=>{updateOutputs();render();});
-  });
-
-  document.querySelectorAll(".segment").forEach(btn=>btn.addEventListener("click",()=>{
-    document.querySelectorAll(".segment").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active"); state.depth=btn.dataset.depth; updateOutputs(); render();
-  }));
-
-  $("regenerate").addEventListener("click",render);
-  $("randomize").addEventListener("click",()=>{
-    $("seed").value=Math.floor(Math.random()*99999999)+1;
-    $("shapeSize").value=60+Math.floor(Math.random()*86);
-    $("density").value=4+Math.floor(Math.random()*13);
-    $("gradientSoftness").value=48+Math.floor(Math.random()*53);
-    $("spacing").value=10+Math.floor(Math.random()*51);
-    $("edgeFade").value=12+Math.floor(Math.random()*65);
-    const themes=Object.keys(THEMES); $("theme").value=themes[Math.floor(Math.random()*themes.length)];
-    $("designMode").value="neonEditorial";
-    updateOutputs(); render();
-  });
-
-
-  const modeSearch=$("modeSearch");
-  if(modeSearch){ modeSearch.addEventListener("input",()=>{ const q=modeSearch.value.trim().toLowerCase(); document.querySelectorAll("#designMode option").forEach(o=>{o.hidden=!!q && !o.textContent.toLowerCase().includes(q);}); document.querySelectorAll("#designMode optgroup").forEach(g=>{g.hidden=Array.from(g.options).every(o=>o.hidden);}); }); }
-
-  $("downloadAll").addEventListener("click",()=>download(`ali-studio-${state.theme}-${state.depth}-collection.svg`,makeCombinedSvg()));
-  $("downloadJson").addEventListener("click",()=>download("ali-studio-settings.json",JSON.stringify(state,null,2),"application/json"));
-  $("zoomIn").addEventListener("click",()=>{zoom=clamp(zoom+.1,.5,1.8);applyZoom();});
-  $("zoomOut").addEventListener("click",()=>{zoom=clamp(zoom-.1,.5,1.8);applyZoom();});
-
-  updateOutputs(); render();
+"use strict";
+const $=id=>document.getElementById(id);
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+const TAU=Math.PI*2;
+const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};
+
+const state={posterCount:5,designMode:"solidGradientEditorial",shapeSize:100,density:8,gradientSoftness:72,spacing:24,textAmount:55,seed:260831,format:"portrait",quality:"large",darkColor:"#050509",lightColor:"#f6efe5"};
+let zoom=1;
+
+function dims(){const b={portrait:{w:1200,h:1800},square:{w:1600,h:1600},landscape:{w:1800,h:1200}}[state.format],q={standard:1,large:1.35,xl:1.8}[state.quality];return{w:Math.round(b.w*q),h:Math.round(b.h*q)}}
+function rgb(hex){let s=String(hex).replace("#","");if(s.length===3)s=s.split("").map(x=>x+x).join("");const v=parseInt(s,16)||0;return[(v>>16)&255,(v>>8)&255,v&255]}
+function mix(a,b,t){const A=rgb(a),B=rgb(b);return"#"+A.map((v,i)=>Math.round(v*(1-t)+B[i]*t).toString(16).padStart(2,"0")).join("")}
+function sf(){return clamp(Number(state.shapeSize)/100,.55,1.4)}
+function neonPalette(i){
+  const t=(i*0.19+(Number(state.seed)%97)/97)%1;
+  const sets=[
+    ["#081019","#4030e8","#ff299e","#ff4f70","#55d8ff","#fff5ff"],
+    ["#05070f","#1739c9","#8256ff","#ff3a9d","#ff7d4f","#fff4e5"],
+    ["#070a14","#2357ff","#00cfe8","#b343ff","#ff3b88","#fff6e9"],
+    ["#0a0711","#4a20bd","#ff2fbd","#ff693f","#ffd05b","#f8f2ff"],
+  ];
+  const s=sets[i%sets.length],u=(t*0.8);
+  return {bg:mix(s[0],s[1],u*.18),c1:s[1],c2:s[2],c3:s[3],c4:s[4],light:s[5]};
+}
+function defs(id,p){
+ return `<defs>
+ <linearGradient id="${id}g1" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="${p.bg}"/><stop offset="${Math.round(35+Number(state.gradientSoftness)*.25)}%" stop-color="${p.c1}"/><stop offset="100%" stop-color="${p.c2}"/></linearGradient>
+ <linearGradient id="${id}g2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${p.c2}"/><stop offset="48%" stop-color="${p.c3}"/><stop offset="100%" stop-color="${p.c4}"/></linearGradient>
+ <linearGradient id="${id}g3" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="${p.c1}"/><stop offset="50%" stop-color="${p.c4}"/><stop offset="100%" stop-color="${p.light}"/></linearGradient>
+ <radialGradient id="${id}r1" cx="35%" cy="30%" r="75%"><stop offset="0%" stop-color="${p.light}"/><stop offset="40%" stop-color="${p.c2}"/><stop offset="75%" stop-color="${p.c1}"/><stop offset="100%" stop-color="${p.bg}"/></radialGradient>
+ </defs>`;
+}
+
+function ribbonPath(x,y,w,h,lean){return `M ${x.toFixed(1)} ${y.toFixed(1)} C ${(x+w*.28).toFixed(1)} ${(y-h*lean).toFixed(1)}, ${(x+w*.72).toFixed(1)} ${(y+h*(1+lean)).toFixed(1)}, ${(x+w).toFixed(1)} ${(y+h).toFixed(1)}`;}
+
+function layout(index,w,h,p,rnd,id){
+ const s=sf(), d=Number(state.density);
+ let o="";
+ if(index%5===0){
+   // Flowing multi-color rings on black.
+   o+=`<rect width="${w}" height="${h}" fill="${p.bg}"/>`;
+   const cx=w*(.50+rnd()*.08),cy=h*(.47+rnd()*.08),R=Math.min(w,h)*.28*s;
+   const cols=[p.c2,p.c1,p.c4,p.c3,p.c2,p.light];
+   const n=8+Math.floor(d*.7);
+   for(let i=0;i<n;i++){
+     const r=R*(1-i/n*.72),dx=Math.sin(i*.55)*w*.012,dy=Math.cos(i*.42)*h*.014;
+     o+=`<ellipse cx="${(cx+dx).toFixed(1)}" cy="${(cy+dy).toFixed(1)}" rx="${(r*1.18).toFixed(1)}" ry="${(r*.52).toFixed(1)}" transform="rotate(${-16+i*2} ${cx} ${cy})" fill="none" stroke="${cols[i%cols.length]}" stroke-width="${Math.max(12,r*.11).toFixed(1)}"/>`;
+   }
+   o+=`<circle cx="${(cx-w*.01).toFixed(1)}" cy="${(cy-h*.01).toFixed(1)}" r="${(R*.17).toFixed(1)}" fill="${p.c4}"/>`;
+   return o;
+ }
+ if(index%5===1){
+   // Ivory background + bold 3D-style ribbon built from solid gradient faces (no effects).
+   const bg=state.lightColor||"#f4efe6"; o+=`<rect width="${w}" height="${h}" fill="${bg}"/>`;
+   const x=w*.23,y=h*.18,ww=w*.56,hh=h*.60;
+   const seg=7; const colors=[p.c1,p.c2,p.c3,p.c4,p.c2,p.c1,p.c3];
+   for(let i=0;i<seg;i++){
+     const yy=y+i*(hh/seg), twist=Math.sin(i*.8)*w*.025, sw=ww*(.62+.10*Math.sin(i));
+     const pts=`${(x+twist).toFixed(1)},${yy.toFixed(1)} ${(x+sw+twist).toFixed(1)},${(yy+hh/seg*.22).toFixed(1)} ${(x+sw+twist*1.1).toFixed(1)},${(yy+hh/seg*.62).toFixed(1)} ${(x+twist*.3).toFixed(1)},${(yy+hh/seg).toFixed(1)}`;
+     o+=`<polygon points="${pts}" fill="${i%2?`url(#${id}g2)`:`url(#${id}g3)`}" />`;
+   }
+   o+=`<polygon points="${w*.20},${h*.68} ${w*.67},${h*.55} ${w*.77},${h*.63} ${w*.28},${h*.78}" fill="${p.c2}"/>`;
+   return o;
+ }
+ if(index%5===2){
+   // Black poster with colorful orbiting bands.
+   o+=`<rect width="${w}" height="${h}" fill="${p.bg}"/>`;
+   const cx=w*.53,cy=h*.55,cols=[p.c1,p.c2,p.c3,p.c4,p.light];
+   for(let i=0;i<10+Math.floor(d/2);i++){
+     const rx=w*(.08+i*.055)*s, ry=h*(.045+i*.035)*s;
+     const rot=-22+i*3.2;
+     o+=`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" transform="rotate(${rot.toFixed(1)} ${cx} ${cy})" fill="none" stroke="${cols[i%cols.length]}" stroke-width="${Math.max(10,w*.007).toFixed(1)}"/>`;
+   }
+   for(let i=0;i<5;i++){
+     const x=w*(.18+i*.16),y=h*(.13+i*.11);
+     o+=`<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${w*.055}" ry="${h*.018}" transform="rotate(-18 ${x} ${y})" fill="url(#${id}g3)"/>`;
+   }
+   return o;
+ }
+ if(index%5===3){
+   // Bright geometric letter-like collage.
+   o+=`<rect width="${w}" height="${h}" fill="${p.c2}"/>`;
+   const pieces=[
+    [0,0,.42,.28,p.c1],[.40,0,.32,.22,p.c4],[.73,.03,.27,.28,p.c3],
+    [.06,.25,.30,.25,p.c4],[.34,.22,.28,.30,p.light],[.62,.27,.34,.22,p.c1],
+    [.00,.49,.25,.27,p.c3],[.25,.51,.36,.30,p.c1],[.59,.49,.29,.28,p.c4],[.86,.54,.14,.25,p.c2],
+    [.05,.78,.29,.20,p.c4],[.35,.80,.25,.18,p.c1],[.60,.77,.40,.22,p.c3]
+   ];
+   pieces.forEach(q=>{const [x,y,ww,hh,c]=q;o+=`<rect x="${(w*x).toFixed(1)}" y="${(h*y).toFixed(1)}" width="${(w*ww).toFixed(1)}" height="${(h*hh).toFixed(1)}" fill="${c}"/>`});
+   o+=`<path d="M ${w*.18} ${h*.08} L ${w*.52} ${h*.08} L ${w*.36} ${h*.43} L ${w*.18} ${h*.43} Z" fill="url(#${id}g2)"/>`;
+   o+=`<path d="M ${w*.52} ${h*.43} L ${w*.83} ${h*.43} L ${w*.66} ${h*.76} L ${w*.39} ${h*.76} Z" fill="url(#${id}g3)"/>`;
+   return o;
+ }
+ // 5: vertical gradient bars.
+ o+=`<rect width="${w}" height="${h}" fill="${p.bg}"/>`;
+ const n=8+Math.floor(d*.65), bw=w/(n*1.55);
+ for(let i=0;i<n;i++){
+   const x=w*.08+i*(w*.84/(n-1)), bh=h*(.28+.055*i)*(0.88+rnd()*.18)*s, y=h*.82-bh;
+   const c=[p.c1,p.c2,p.c3,p.c4,p.light][i%5];
+   o+=`<rect x="${(x-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${c}" />`;
+   if(i%2===0) o+=`<rect x="${(x-bw*.31).toFixed(1)}" y="${(y+bh*.18).toFixed(1)}" width="${(bw*.62).toFixed(1)}" height="${(bh*.58).toFixed(1)}" fill="url(#${id}g2)"/>`;
+ }
+ return o;
+}
+
+function textLayer(index,w,h,p){
+ const amount=Number(state.textAmount)/100;if(amount<=0)return"";
+ const titles=["design","DESIGN","abstract","visual","gradient art","creative layout"];
+ const title=titles[index%titles.length];
+ const fs=Math.max(18,Math.round(Math.min(w,h)*.055*(.72+.28*amount)));
+ const fill=index===1 ? "#111216" : (state.lightColor&&index===4 ? "#111216" : "#ffffff");
+ return `<g font-family="Arial, Helvetica, sans-serif" fill="${fill}">
+   <text x="${(w*.07).toFixed(1)}" y="${(h*.11).toFixed(1)}" font-size="${Math.round(fs*.32)}" font-weight="700" letter-spacing="${Math.max(2,fs*.07)}">ALI STUDIO</text>
+   <text x="${(w*.07).toFixed(1)}" y="${(h*.18).toFixed(1)}" font-size="${fs}" font-weight="500" letter-spacing="${Math.max(0,fs*.01)}">${esc(title)}</text>
+   <text x="${(w*.07).toFixed(1)}" y="${(h*.90).toFixed(1)}" font-size="${Math.round(fs*.23)}" font-weight="700" letter-spacing="${Math.max(1,fs*.08)}">VISUAL SYSTEM / ${String(index+1).padStart(2,"0")}</text>
+   <text x="${(w*.07).toFixed(1)}" y="${(h*.93).toFixed(1)}" font-size="${Math.round(fs*.18)}" letter-spacing="${Math.max(1,fs*.05)}">SOLID COLOR + GRADIENT / EDITORIAL STUDY</text>
+ </g>`;
+}
+
+function makeSvg(index){
+ const {w,h}=dims(),rnd=mulberry32((Number(state.seed)||1)+index*7919),p=neonPalette(index),id=`ag_${Number(state.seed)||1}_${index}`;
+ // IMPORTANT: only gradients/solid colors are included. No filter, mask, clipPath or SVG effect.
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+   <title>ALI STUDIO — Solid + Gradient Editorial ${String(index+1).padStart(2,"0")}</title>
+   <metadata>Solid colors and gradients only. No SVG filter effects.</metadata>
+   ${defs(id,p)}
+   ${layout(index,w,h,p,rnd,id)}
+   ${textLayer(index,w,h,p)}
+ </svg>`;
+}
+
+function makeCombinedSvg(){
+ const {w:pw,h:ph}=dims(),count=Number(state.posterCount),cols=Math.min(4,count),rows=Math.ceil(count/cols),gap=36;
+ const aw=pw*cols+gap*(cols+1),ah=ph*rows+gap*(rows+1);
+ let out=`<svg xmlns="http://www.w3.org/2000/svg" width="${aw}" height="${ah}" viewBox="0 0 ${aw} ${ah}"><title>ALI STUDIO — Solid + Gradient Editorial Collection</title><rect width="${aw}" height="${ah}" fill="#e6e7e6"/>`;
+ for(let i=0;i<count;i++){const x=gap+(i%cols)*(pw+gap),y=gap+Math.floor(i/cols)*(ph+gap);out+=`<g transform="translate(${x} ${y})">${makeSvg(i).replace(/^<svg[^>]*>/,"").replace(/<\/svg>\s*$/i,"")}</g>`}
+ return out+"</svg>";
+}
+function download(name,content,mime="image/svg+xml"){const b=new Blob([content],{type:mime}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),800)}
+async function copyText(t){try{await navigator.clipboard.writeText(t);alert("SVG copied.");}catch{const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();alert("SVG copied.");}}
+function readControls(){["posterCount","shapeSize","density","gradientSoftness","spacing","textAmount"].forEach(k=>state[k]=Number($(k).value));["designMode","format","quality","darkColor","lightColor"].forEach(k=>state[k]=$(k).value);state.seed=Number($("seed").value)||1}
+function updateOutputs(){$("posterCountVal").textContent=state.posterCount;$("shapeSizeVal").textContent=state.shapeSize+"%";$("densityVal").textContent=state.density;$("gradientSoftnessVal").textContent=state.gradientSoftness+"%";$("spacingVal").textContent=state.spacing+"%";$("textAmountVal").textContent=state.textAmount+"%";$("collectionCount").textContent=state.posterCount}
+function render(){readControls();updateOutputs();const g=$("posterGrid");g.innerHTML="";for(let i=0;i<state.posterCount;i++){const n=$("posterTemplate").content.firstElementChild.cloneNode(true),svg=makeSvg(i);n.querySelector(".poster-number").textContent=`DESIGN ${String(i+1).padStart(2,"0")}`;n.querySelector(".poster-frame").innerHTML=svg;n.querySelector(".download-one").onclick=()=>download(`ali-studio-editorial-${String(i+1).padStart(2,"0")}.svg`,svg);n.querySelector(".copy-one").onclick=()=>copyText(svg);g.appendChild(n)}g.style.gridTemplateColumns=`repeat(${Math.min(4,state.posterCount)},minmax(0,1fr))`;$("workspaceTitle").textContent="SOLID + GRADIENT EDITORIAL";$("statusText").textContent="Solid colors + gradients only";applyZoom()}
+function applyZoom(){$("posterGrid").style.transform=`scale(${zoom})`;$("zoomLabel").textContent=Math.round(zoom*100)+"%"}
+["posterCount","designMode","shapeSize","density","gradientSoftness","spacing","textAmount","seed","format","quality","darkColor","lightColor"].forEach(id=>{$(id).addEventListener("input",()=>{updateOutputs();render()});$(id).addEventListener("change",()=>{updateOutputs();render()})})
+$("regenerate").onclick=render;
+$("randomize").onclick=()=>{$("seed").value=Math.floor(Math.random()*9999999)+1;$("shapeSize").value=70+Math.floor(Math.random()*60);$("density").value=5+Math.floor(Math.random()*11);$("gradientSoftness").value=45+Math.floor(Math.random()*56);$("spacing").value=10+Math.floor(Math.random()*51);render()};
+$("downloadAll").onclick=()=>download("ali-studio-solid-gradient-editorial-collection.svg",makeCombinedSvg());
+$("downloadJson").onclick=()=>download("ali-studio-solid-gradient-editorial-settings.json",JSON.stringify(state,null,2),"application/json");
+$("zoomIn").onclick=()=>{zoom=clamp(zoom+.1,.5,1.8);applyZoom()};$("zoomOut").onclick=()=>{zoom=clamp(zoom-.1,.5,1.8);applyZoom()};
+render();
 })();
