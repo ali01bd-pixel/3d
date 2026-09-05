@@ -1,154 +1,120 @@
 (() => {
-"use strict";
-const $=id=>document.getElementById(id);
-const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
-const TAU=Math.PI*2;
-const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const clamp = (n,a,b) => Math.max(a,Math.min(b,n));
+  const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+  const mulberry32 = a => () => { let t=a+=0x6D2B79F5; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; };
+  const state={posterCount:5,designMode:"oceanWatercolor",shapeSize:100,density:8,gradientSoftness:72,spacing:24,textAmount:55,seed:260831,format:"portrait",quality:"large",darkColor:"#075475",lightColor:"#eafcff"};
+  let zoom=1;
 
-const state={posterCount:5,designMode:"solidGradientEditorial",shapeSize:100,density:8,gradientSoftness:72,spacing:24,textAmount:55,seed:260831,format:"portrait",quality:"large",darkColor:"#050509",lightColor:"#f6efe5"};
-let zoom=1;
+  function dims(){const b={portrait:{w:1200,h:1800},square:{w:1600,h:1600},landscape:{w:1800,h:1200}}[state.format]; const q={standard:1,large:1.35,xl:1.8}[state.quality]; return {w:Math.round(b.w*q),h:Math.round(b.h*q)};}
+  function hexToRgb(h){const s=String(h).replace("#","");const v=parseInt(s.length===3?s.split("").map(x=>x+x).join(""):s,16)||0;return {r:(v>>16)&255,g:(v>>8)&255,b:v&255};}
+  function mixHex(a,b,t){const A=hexToRgb(a),B=hexToRgb(b);return "#"+[A.r,A.g,A.b].map((v,i)=>Math.round(v*(1-t)+[B.r,B.g,B.b][i]*t).toString(16).padStart(2,"0")).join("");}
+  function sizeFactor(){return clamp(Number(state.shapeSize)/100,.55,1.4);}
+  function palette(index){
+    const base=["#075475","#0a6f91","#2ca8c9","#6bc9da","#c8edf1","#edfaff","#d7f3ef"];
+    const jitter=(index*17+(Number(state.seed)||1)%31)%base.length;
+    return {dark:state.darkColor, deep:mixHex(base[(jitter+0)%base.length],state.darkColor,.45), mid:mixHex(base[(jitter+2)%base.length],"#4ab9cf",.35), cyan:base[(jitter+3)%base.length], light:state.lightColor, foam:mixHex(base[(jitter+5)%base.length],state.lightColor,.40), white:"#f8ffff", ink:"#16445a"};
+  }
+  function defs(id,p){return `<defs>
+    <linearGradient id="${id}_sky" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="${p.white}"/><stop offset="48%" stop-color="${p.light}"/><stop offset="100%" stop-color="${p.mid}"/></linearGradient>
+    <linearGradient id="${id}_sea" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="${p.light}"/><stop offset="42%" stop-color="${p.cyan}"/><stop offset="100%" stop-color="${p.dark}"/></linearGradient>
+    <linearGradient id="${id}_foam" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="${p.white}"/><stop offset="45%" stop-color="${p.foam}"/><stop offset="100%" stop-color="${p.cyan}"/></linearGradient>
+    <linearGradient id="${id}_deep" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${p.mid}"/><stop offset="55%" stop-color="${p.deep}"/><stop offset="100%" stop-color="${p.dark}"/></linearGradient>
+    <radialGradient id="${id}_wash" cx="50%" cy="42%" r="70%"><stop offset="0%" stop-color="${p.white}" stop-opacity=".92"/><stop offset="40%" stop-color="${p.light}" stop-opacity=".72"/><stop offset="78%" stop-color="${p.cyan}" stop-opacity=".44"/><stop offset="100%" stop-color="${p.dark}" stop-opacity=".14"/></radialGradient>
+    <radialGradient id="${id}_aqua" cx="44%" cy="40%" r="68%"><stop offset="0%" stop-color="${p.white}" stop-opacity=".85"/><stop offset="45%" stop-color="${p.cyan}" stop-opacity=".72"/><stop offset="100%" stop-color="${p.deep}" stop-opacity=".12"/></radialGradient>
+  </defs>`;}
 
-function dims(){const b={portrait:{w:1200,h:1800},square:{w:1600,h:1600},landscape:{w:1800,h:1200}}[state.format],q={standard:1,large:1.35,xl:1.8}[state.quality];return{w:Math.round(b.w*q),h:Math.round(b.h*q)}}
-function rgb(hex){let s=String(hex).replace("#","");if(s.length===3)s=s.split("").map(x=>x+x).join("");const v=parseInt(s,16)||0;return[(v>>16)&255,(v>>8)&255,v&255]}
-function mix(a,b,t){const A=rgb(a),B=rgb(b);return"#"+A.map((v,i)=>Math.round(v*(1-t)+B[i]*t).toString(16).padStart(2,"0")).join("")}
-function sf(){return clamp(Number(state.shapeSize)/100,.55,1.4)}
-function neonPalette(i){
-  const t=(i*0.19+(Number(state.seed)%97)/97)%1;
-  const sets=[
-    ["#081019","#4030e8","#ff299e","#ff4f70","#55d8ff","#fff5ff"],
-    ["#05070f","#1739c9","#8256ff","#ff3a9d","#ff7d4f","#fff4e5"],
-    ["#070a14","#2357ff","#00cfe8","#b343ff","#ff3b88","#fff6e9"],
-    ["#0a0711","#4a20bd","#ff2fbd","#ff693f","#ffd05b","#f8f2ff"],
-  ];
-  const s=sets[i%sets.length],u=(t*0.8);
-  return {bg:mix(s[0],s[1],u*.18),c1:s[1],c2:s[2],c3:s[3],c4:s[4],light:s[5]};
-}
-function defs(id,p){
- return `<defs>
- <linearGradient id="${id}g1" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="${p.bg}"/><stop offset="${Math.round(35+Number(state.gradientSoftness)*.25)}%" stop-color="${p.c1}"/><stop offset="100%" stop-color="${p.c2}"/></linearGradient>
- <linearGradient id="${id}g2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${p.c2}"/><stop offset="48%" stop-color="${p.c3}"/><stop offset="100%" stop-color="${p.c4}"/></linearGradient>
- <linearGradient id="${id}g3" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="${p.c1}"/><stop offset="50%" stop-color="${p.c4}"/><stop offset="100%" stop-color="${p.light}"/></linearGradient>
- <radialGradient id="${id}r1" cx="35%" cy="30%" r="75%"><stop offset="0%" stop-color="${p.light}"/><stop offset="40%" stop-color="${p.c2}"/><stop offset="75%" stop-color="${p.c1}"/><stop offset="100%" stop-color="${p.bg}"/></radialGradient>
- </defs>`;
-}
+  function oceanLayout(index,w,h,p,rnd,id){
+    const s=sizeFactor(), d=Number(state.density); let out="";
+    // 1: white sky / large cresting sea wash.
+    if(index%5===0){
+      out+=`<rect width="${w}" height="${h}" fill="url(#${id}_sky)"/>`;
+      out+=`<path d="M 0 ${h*.66} C ${w*.10} ${h*.48}, ${w*.28} ${h*.54}, ${w*.43} ${h*.67} C ${w*.61} ${h*.84}, ${w*.74} ${h*.62}, ${w} ${h*.49} L ${w} ${h} L 0 ${h} Z" fill="url(#${id}_sea)" opacity=".78"/>`;
+      for(let i=0;i<d;i++){
+        const y=h*(.66+i*.022), x=w*(.12+(i%4)*.06), a=w*(.16+i*.015);
+        out+=`<path d="M ${x.toFixed(1)} ${y.toFixed(1)} C ${(x+a*.35).toFixed(1)} ${(y-h*.06).toFixed(1)}, ${(x+a*.72).toFixed(1)} ${(y-h*.10).toFixed(1)}, ${(x+a).toFixed(1)} ${(y-h*.025).toFixed(1)} C ${(x+a*.76).toFixed(1)} ${(y+h*.02).toFixed(1)}, ${(x+a*.38).toFixed(1)} ${(y+h*.035).toFixed(1)}, ${x.toFixed(1)} ${(y+h*.02).toFixed(1)} Z" fill="${i%3===0?p.white:p.foam}" opacity="${(.15+.045*(d-i)).toFixed(2)}"/>`;
+      }
+      out+=`<ellipse cx="${w*.27}" cy="${h*.16}" rx="${w*.23}" ry="${h*.16}" fill="url(#${id}_wash)" opacity=".72"/>`;
+      return out;
+    }
+    // 2: layered ocean wave bands.
+    if(index%5===1){
+      out+=`<rect width="${w}" height="${h}" fill="${p.white}"/>`;
+      const bands=7+Math.floor(d/2);
+      for(let i=0;i<bands;i++){
+        const y=h*(.40+i*.075), amp=h*(.035+i*.005)*s, col=i%3===0?p.cyan:(i%2?p.mid:p.deep);
+        out+=`<path d="M 0 ${y.toFixed(1)} C ${w*.20} ${(y-amp).toFixed(1)}, ${w*.42} ${(y+amp*.85).toFixed(1)}, ${w*.62} ${(y-amp*.55).toFixed(1)} C ${w*.78} ${(y-amp*.92).toFixed(1)}, ${w*.90} ${(y+amp*.48).toFixed(1)}, ${w} ${(y-amp*.14).toFixed(1)} L ${w} ${(y+amp*1.05).toFixed(1)} C ${w*.84} ${(y+amp*.42).toFixed(1)}, ${w*.67} ${(y+amp*1.15).toFixed(1)}, ${w*.48} ${(y+amp*.58).toFixed(1)} C ${w*.27} ${(y-amp*.18).toFixed(1)}, ${w*.15} ${(y+amp*.92).toFixed(1)}, 0 ${(y+amp*.50).toFixed(1)} Z" fill="${col}" opacity="${(.32+.055*i).toFixed(2)}"/>`;
+      }
+      out+=`<path d="M 0 ${h*.78} C ${w*.23} ${h*.68}, ${w*.51} ${h*.90}, ${w} ${h*.73} L ${w} ${h} L 0 ${h} Z" fill="url(#${id}_deep)" opacity=".76"/>`;
+      return out;
+    }
+    // 3: deep sea tonal blobs/arches without filters.
+    if(index%5===2){
+      out+=`<rect width="${w}" height="${h}" fill="url(#${id}_sea)"/>`;
+      const shapes=6+Math.floor(d/3);
+      for(let i=0;i<shapes;i++){
+        const x=w*(.12+rnd()*.72), y=h*(.18+rnd()*.64), rx=w*(.11+rnd()*.17)*s, ry=h*(.06+rnd()*.13)*s;
+        const c=i%4===0?p.white:(i%3===0?p.light:(i%2?p.cyan:p.deep));
+        out+=`<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="${c}" opacity="${(.10+.09*rnd()).toFixed(2)}"/>`;
+      }
+      out+=`<path d="M 0 ${h*.74} C ${w*.18} ${h*.62}, ${w*.34} ${h*.84}, ${w*.55} ${h*.70} C ${w*.74} ${h*.56}, ${w*.88} ${h*.74}, ${w} ${h*.62} L ${w} ${h} L 0 ${h} Z" fill="url(#${id}_deep)" opacity=".82"/>`;
+      return out;
+    }
+    // 4: horizon + calm stacked water layers.
+    if(index%5===3){
+      out+=`<rect width="${w}" height="${h}" fill="url(#${id}_sky)"/>`;
+      out+=`<rect x="0" y="${h*.52}" width="${w}" height="${h*.48}" fill="url(#${id}_sea)"/>`;
+      for(let i=0;i<9;i++){
+        const y=h*(.57+i*.043), hh=h*(.028+.008*(i%3)), col=i%3===0?p.white:(i%2?p.light:p.cyan);
+        out+=`<rect x="0" y="${y.toFixed(1)}" width="${w}" height="${hh.toFixed(1)}" fill="${col}" opacity="${(.10+.06*(i%4)).toFixed(2)}"/>`;
+      }
+      out+=`<path d="M 0 ${h*.59} C ${w*.22} ${h*.50}, ${w*.45} ${h*.63}, ${w*.72} ${h*.54} C ${w*.86} ${h*.50}, ${w*.93} ${h*.55}, ${w} ${h*.51}" fill="none" stroke="${p.white}" stroke-width="${Math.max(7,w*.006).toFixed(1)}" opacity=".46"/>`;
+      out+=`<ellipse cx="${w*.50}" cy="${h*.20}" rx="${w*.32}" ry="${h*.13}" fill="url(#${id}_wash)" opacity=".68"/>`;
+      return out;
+    }
+    // 5: big translucent wave halves, closest to the reference set.
+    out+=`<rect width="${w}" height="${h}" fill="${p.white}"/>`;
+    const R=Math.min(w,h)*.48*s;
+    out+=`<path d="M ${-R} ${h*.72} C ${w*.04} ${h*.35}, ${w*.34} ${h*.30}, ${w*.52} ${h*.54} C ${w*.68} ${h*.74}, ${w*.86} ${h*.63}, ${w+R*.08} ${h*.35} L ${w+R*.10} ${h} L ${-R} ${h} Z" fill="url(#${id}_aqua)" opacity=".78"/>`;
+    out+=`<path d="M 0 ${h*.79} C ${w*.16} ${h*.55}, ${w*.39} ${h*.53}, ${w*.58} ${h*.76} C ${w*.72} ${h*.92}, ${w*.88} ${h*.74}, ${w} ${h*.61} L ${w} ${h} L 0 ${h} Z" fill="url(#${id}_deep)" opacity=".55"/>`;
+    for(let i=0;i<d;i++){
+      const y=h*(.30+i*.038), off=w*(.08+i*.02);
+      out+=`<path d="M ${(off*-1).toFixed(1)} ${y.toFixed(1)} C ${w*.18} ${(y-h*.055).toFixed(1)}, ${w*.42} ${(y+h*.05).toFixed(1)}, ${w*.62} ${(y-h*.015).toFixed(1)} C ${w*.77} ${(y-h*.055).toFixed(1)}, ${w*.90} ${(y+h*.02).toFixed(1)}, ${(w+off).toFixed(1)} ${(y-h*.02).toFixed(1)}" fill="none" stroke="${i%3===0?p.white:p.foam}" stroke-width="${Math.max(5,w*.004).toFixed(1)}" opacity="${(.16+.025*i).toFixed(2)}"/>`;
+    }
+    return out;
+  }
 
-function ribbonPath(x,y,w,h,lean){return `M ${x.toFixed(1)} ${y.toFixed(1)} C ${(x+w*.28).toFixed(1)} ${(y-h*lean).toFixed(1)}, ${(x+w*.72).toFixed(1)} ${(y+h*(1+lean)).toFixed(1)}, ${(x+w).toFixed(1)} ${(y+h).toFixed(1)}`;}
+  function textLayer(index,w,h){
+    const a=Number(state.textAmount)/100; if(a<=0) return "";
+    const titles=["SEA WAVE","OCEAN WAVES","DEEP SEA","OCEAN STUDY","SEA FORM"];
+    const subs=["ABSTRACT WATERCOLOR","OCEAN EDITORIAL","WATER / COLOR","DEEP BLUE STUDY","VISUAL OCEAN"];
+    const fs=Math.max(18,Math.round(Math.min(w,h)*.028));
+    return `<g font-family="Arial, Helvetica, sans-serif" fill="#163f55" opacity="${(.72+.25*a).toFixed(2)}">
+      <text x="${(w*.10).toFixed(1)}" y="${(h*.13).toFixed(1)}" font-size="${fs}" font-weight="700" letter-spacing="${Math.max(2,fs*.14).toFixed(1)}">${esc(titles[index%titles.length])}</text>
+      <text x="${(w*.10).toFixed(1)}" y="${(h*.16).toFixed(1)}" font-size="${Math.round(fs*.36)}" letter-spacing="${Math.max(1,fs*.06).toFixed(1)}">${esc(subs[index%subs.length])}</text>
+      <text x="${(w*.10).toFixed(1)}" y="${(h*.90).toFixed(1)}" font-size="${Math.round(fs*.33)}" font-weight="700" letter-spacing="${Math.max(1,fs*.07).toFixed(1)}">ALI STUDIO / ${String(index+1).padStart(2,"0")}</text>
+      <text x="${(w*.10).toFixed(1)}" y="${(h*.925).toFixed(1)}" font-size="${Math.round(fs*.24)}" letter-spacing="${Math.max(1,fs*.05).toFixed(1)}">OCEAN COLOR SERIES</text>
+    </g>`;
+  }
 
-function layout(index,w,h,p,rnd,id){
- const s=sf(), d=Number(state.density);
- let o="";
- if(index%5===0){
-   // Flowing multi-color rings on black.
-   o+=`<rect width="${w}" height="${h}" fill="${p.bg}"/>`;
-   const cx=w*(.50+rnd()*.08),cy=h*(.47+rnd()*.08),R=Math.min(w,h)*.28*s;
-   const cols=[p.c2,p.c1,p.c4,p.c3,p.c2,p.light];
-   const n=8+Math.floor(d*.7);
-   for(let i=0;i<n;i++){
-     const r=R*(1-i/n*.72),dx=Math.sin(i*.55)*w*.012,dy=Math.cos(i*.42)*h*.014;
-     o+=`<ellipse cx="${(cx+dx).toFixed(1)}" cy="${(cy+dy).toFixed(1)}" rx="${(r*1.18).toFixed(1)}" ry="${(r*.52).toFixed(1)}" transform="rotate(${-16+i*2} ${cx} ${cy})" fill="none" stroke="${cols[i%cols.length]}" stroke-width="${Math.max(12,r*.11).toFixed(1)}"/>`;
-   }
-   o+=`<circle cx="${(cx-w*.01).toFixed(1)}" cy="${(cy-h*.01).toFixed(1)}" r="${(R*.17).toFixed(1)}" fill="${p.c4}"/>`;
-   return o;
- }
- if(index%5===1){
-   // Ivory background + bold 3D-style ribbon built from solid gradient faces (no effects).
-   const bg=state.lightColor||"#f4efe6"; o+=`<rect width="${w}" height="${h}" fill="${bg}"/>`;
-   const x=w*.23,y=h*.18,ww=w*.56,hh=h*.60;
-   const seg=7; const colors=[p.c1,p.c2,p.c3,p.c4,p.c2,p.c1,p.c3];
-   for(let i=0;i<seg;i++){
-     const yy=y+i*(hh/seg), twist=Math.sin(i*.8)*w*.025, sw=ww*(.62+.10*Math.sin(i));
-     const pts=`${(x+twist).toFixed(1)},${yy.toFixed(1)} ${(x+sw+twist).toFixed(1)},${(yy+hh/seg*.22).toFixed(1)} ${(x+sw+twist*1.1).toFixed(1)},${(yy+hh/seg*.62).toFixed(1)} ${(x+twist*.3).toFixed(1)},${(yy+hh/seg).toFixed(1)}`;
-     o+=`<polygon points="${pts}" fill="${i%2?`url(#${id}g2)`:`url(#${id}g3)`}" />`;
-   }
-   o+=`<polygon points="${w*.20},${h*.68} ${w*.67},${h*.55} ${w*.77},${h*.63} ${w*.28},${h*.78}" fill="${p.c2}"/>`;
-   return o;
- }
- if(index%5===2){
-   // Black poster with colorful orbiting bands.
-   o+=`<rect width="${w}" height="${h}" fill="${p.bg}"/>`;
-   const cx=w*.53,cy=h*.55,cols=[p.c1,p.c2,p.c3,p.c4,p.light];
-   for(let i=0;i<10+Math.floor(d/2);i++){
-     const rx=w*(.08+i*.055)*s, ry=h*(.045+i*.035)*s;
-     const rot=-22+i*3.2;
-     o+=`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" transform="rotate(${rot.toFixed(1)} ${cx} ${cy})" fill="none" stroke="${cols[i%cols.length]}" stroke-width="${Math.max(10,w*.007).toFixed(1)}"/>`;
-   }
-   for(let i=0;i<5;i++){
-     const x=w*(.18+i*.16),y=h*(.13+i*.11);
-     o+=`<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${w*.055}" ry="${h*.018}" transform="rotate(-18 ${x} ${y})" fill="url(#${id}g3)"/>`;
-   }
-   return o;
- }
- if(index%5===3){
-   // Bright geometric letter-like collage.
-   o+=`<rect width="${w}" height="${h}" fill="${p.c2}"/>`;
-   const pieces=[
-    [0,0,.42,.28,p.c1],[.40,0,.32,.22,p.c4],[.73,.03,.27,.28,p.c3],
-    [.06,.25,.30,.25,p.c4],[.34,.22,.28,.30,p.light],[.62,.27,.34,.22,p.c1],
-    [.00,.49,.25,.27,p.c3],[.25,.51,.36,.30,p.c1],[.59,.49,.29,.28,p.c4],[.86,.54,.14,.25,p.c2],
-    [.05,.78,.29,.20,p.c4],[.35,.80,.25,.18,p.c1],[.60,.77,.40,.22,p.c3]
-   ];
-   pieces.forEach(q=>{const [x,y,ww,hh,c]=q;o+=`<rect x="${(w*x).toFixed(1)}" y="${(h*y).toFixed(1)}" width="${(w*ww).toFixed(1)}" height="${(h*hh).toFixed(1)}" fill="${c}"/>`});
-   o+=`<path d="M ${w*.18} ${h*.08} L ${w*.52} ${h*.08} L ${w*.36} ${h*.43} L ${w*.18} ${h*.43} Z" fill="url(#${id}g2)"/>`;
-   o+=`<path d="M ${w*.52} ${h*.43} L ${w*.83} ${h*.43} L ${w*.66} ${h*.76} L ${w*.39} ${h*.76} Z" fill="url(#${id}g3)"/>`;
-   return o;
- }
- // 5: vertical gradient bars.
- o+=`<rect width="${w}" height="${h}" fill="${p.bg}"/>`;
- const n=8+Math.floor(d*.65), bw=w/(n*1.55);
- for(let i=0;i<n;i++){
-   const x=w*.08+i*(w*.84/(n-1)), bh=h*(.28+.055*i)*(0.88+rnd()*.18)*s, y=h*.82-bh;
-   const c=[p.c1,p.c2,p.c3,p.c4,p.light][i%5];
-   o+=`<rect x="${(x-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${c}" />`;
-   if(i%2===0) o+=`<rect x="${(x-bw*.31).toFixed(1)}" y="${(y+bh*.18).toFixed(1)}" width="${(bw*.62).toFixed(1)}" height="${(bh*.58).toFixed(1)}" fill="url(#${id}g2)"/>`;
- }
- return o;
-}
-
-function textLayer(index,w,h,p){
- const amount=Number(state.textAmount)/100;if(amount<=0)return"";
- const titles=["design","DESIGN","abstract","visual","gradient art","creative layout"];
- const title=titles[index%titles.length];
- const fs=Math.max(18,Math.round(Math.min(w,h)*.055*(.72+.28*amount)));
- const fill=index===1 ? "#111216" : (state.lightColor&&index===4 ? "#111216" : "#ffffff");
- return `<g font-family="Arial, Helvetica, sans-serif" fill="${fill}">
-   <text x="${(w*.07).toFixed(1)}" y="${(h*.11).toFixed(1)}" font-size="${Math.round(fs*.32)}" font-weight="700" letter-spacing="${Math.max(2,fs*.07)}">ALI STUDIO</text>
-   <text x="${(w*.07).toFixed(1)}" y="${(h*.18).toFixed(1)}" font-size="${fs}" font-weight="500" letter-spacing="${Math.max(0,fs*.01)}">${esc(title)}</text>
-   <text x="${(w*.07).toFixed(1)}" y="${(h*.90).toFixed(1)}" font-size="${Math.round(fs*.23)}" font-weight="700" letter-spacing="${Math.max(1,fs*.08)}">VISUAL SYSTEM / ${String(index+1).padStart(2,"0")}</text>
-   <text x="${(w*.07).toFixed(1)}" y="${(h*.93).toFixed(1)}" font-size="${Math.round(fs*.18)}" letter-spacing="${Math.max(1,fs*.05)}">SOLID COLOR + GRADIENT / EDITORIAL STUDY</text>
- </g>`;
-}
-
-function makeSvg(index){
- const {w,h}=dims(),rnd=mulberry32((Number(state.seed)||1)+index*7919),p=neonPalette(index),id=`ag_${Number(state.seed)||1}_${index}`;
- // IMPORTANT: only gradients/solid colors are included. No filter, mask, clipPath or SVG effect.
- return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-   <title>ALI STUDIO — Solid + Gradient Editorial ${String(index+1).padStart(2,"0")}</title>
-   <metadata>Solid colors and gradients only. No SVG filter effects.</metadata>
-   ${defs(id,p)}
-   ${layout(index,w,h,p,rnd,id)}
-   ${textLayer(index,w,h,p)}
- </svg>`;
-}
-
-function makeCombinedSvg(){
- const {w:pw,h:ph}=dims(),count=Number(state.posterCount),cols=Math.min(4,count),rows=Math.ceil(count/cols),gap=36;
- const aw=pw*cols+gap*(cols+1),ah=ph*rows+gap*(rows+1);
- let out=`<svg xmlns="http://www.w3.org/2000/svg" width="${aw}" height="${ah}" viewBox="0 0 ${aw} ${ah}"><title>ALI STUDIO — Solid + Gradient Editorial Collection</title><rect width="${aw}" height="${ah}" fill="#e6e7e6"/>`;
- for(let i=0;i<count;i++){const x=gap+(i%cols)*(pw+gap),y=gap+Math.floor(i/cols)*(ph+gap);out+=`<g transform="translate(${x} ${y})">${makeSvg(i).replace(/^<svg[^>]*>/,"").replace(/<\/svg>\s*$/i,"")}</g>`}
- return out+"</svg>";
-}
-function download(name,content,mime="image/svg+xml"){const b=new Blob([content],{type:mime}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),800)}
-async function copyText(t){try{await navigator.clipboard.writeText(t);alert("SVG copied.");}catch{const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();alert("SVG copied.");}}
-function readControls(){["posterCount","shapeSize","density","gradientSoftness","spacing","textAmount"].forEach(k=>state[k]=Number($(k).value));["designMode","format","quality","darkColor","lightColor"].forEach(k=>state[k]=$(k).value);state.seed=Number($("seed").value)||1}
-function updateOutputs(){$("posterCountVal").textContent=state.posterCount;$("shapeSizeVal").textContent=state.shapeSize+"%";$("densityVal").textContent=state.density;$("gradientSoftnessVal").textContent=state.gradientSoftness+"%";$("spacingVal").textContent=state.spacing+"%";$("textAmountVal").textContent=state.textAmount+"%";$("collectionCount").textContent=state.posterCount}
-function render(){readControls();updateOutputs();const g=$("posterGrid");g.innerHTML="";for(let i=0;i<state.posterCount;i++){const n=$("posterTemplate").content.firstElementChild.cloneNode(true),svg=makeSvg(i);n.querySelector(".poster-number").textContent=`DESIGN ${String(i+1).padStart(2,"0")}`;n.querySelector(".poster-frame").innerHTML=svg;n.querySelector(".download-one").onclick=()=>download(`ali-studio-editorial-${String(i+1).padStart(2,"0")}.svg`,svg);n.querySelector(".copy-one").onclick=()=>copyText(svg);g.appendChild(n)}g.style.gridTemplateColumns=`repeat(${Math.min(4,state.posterCount)},minmax(0,1fr))`;$("workspaceTitle").textContent="SOLID + GRADIENT EDITORIAL";$("statusText").textContent="Solid colors + gradients only";applyZoom()}
-function applyZoom(){$("posterGrid").style.transform=`scale(${zoom})`;$("zoomLabel").textContent=Math.round(zoom*100)+"%"}
-["posterCount","designMode","shapeSize","density","gradientSoftness","spacing","textAmount","seed","format","quality","darkColor","lightColor"].forEach(id=>{$(id).addEventListener("input",()=>{updateOutputs();render()});$(id).addEventListener("change",()=>{updateOutputs();render()})})
-$("regenerate").onclick=render;
-$("randomize").onclick=()=>{$("seed").value=Math.floor(Math.random()*9999999)+1;$("shapeSize").value=70+Math.floor(Math.random()*60);$("density").value=5+Math.floor(Math.random()*11);$("gradientSoftness").value=45+Math.floor(Math.random()*56);$("spacing").value=10+Math.floor(Math.random()*51);render()};
-$("downloadAll").onclick=()=>download("ali-studio-solid-gradient-editorial-collection.svg",makeCombinedSvg());
-$("downloadJson").onclick=()=>download("ali-studio-solid-gradient-editorial-settings.json",JSON.stringify(state,null,2),"application/json");
-$("zoomIn").onclick=()=>{zoom=clamp(zoom+.1,.5,1.8);applyZoom()};$("zoomOut").onclick=()=>{zoom=clamp(zoom-.1,.5,1.8);applyZoom()};
-render();
+  function makeSvg(index){
+    const {w,h}=dims(); const rnd=mulberry32((Number(state.seed)||1)+index*7919); const p=palette(index); const id=`ocean_${Number(state.seed)||1}_${index}`;
+    let out=defs(id,p); out+=oceanLayout(index,w,h,p,rnd,id); out+=textLayer(index,w,h);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><title>ALI STUDIO — Ocean Watercolor ${String(index+1).padStart(2,"0")}</title><metadata>Generated locally by ALI STUDIO. Solid colors and gradients only. No SVG effects.</metadata>${out}</svg>`;
+  }
+  function makeCombinedSvg(){const {w:pw,h:ph}=dims();const count=Number(state.posterCount),cols=Math.min(4,Math.max(1,count)),rows=Math.ceil(count/cols),gap=36;const aw=pw*cols+gap*(cols+1),ah=ph*rows+gap*(rows+1);let out=`<svg xmlns="http://www.w3.org/2000/svg" width="${aw}" height="${ah}" viewBox="0 0 ${aw} ${ah}"><title>ALI STUDIO — Ocean Watercolor Collection</title><rect width="${aw}" height="${ah}" fill="#eaf3f6"/>`;for(let i=0;i<count;i++){const x=gap+(i%cols)*(pw+gap),y=gap+Math.floor(i/cols)*(ph+gap);const inner=makeSvg(i).replace(/^<svg[^>]*>/,"").replace(/<\/svg>\s*$/i,"");out+=`<g transform="translate(${x} ${y})">${inner}</g>`;}return out+"</svg>";}
+  function download(filename,content,mime="image/svg+xml"){const blob=new Blob([content],{type:mime}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+  async function copyText(text){try{await navigator.clipboard.writeText(text);alert("SVG copied to clipboard.");}catch{const ta=document.createElement("textarea");ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();alert("SVG copied to clipboard.");}}
+  function readControls(){const numeric=["posterCount","shapeSize","density","gradientSoftness","spacing","textAmount"];["posterCount","shapeSize","density","gradientSoftness","spacing","textAmount","format","quality","darkColor","lightColor"].forEach(k=>{const el=$(k);state[k]=numeric.includes(k)?Number(el.value):el.value;});state.seed=Number($("seed").value)||1;}
+  function updateOutputs(){const map={posterCount:["posterCountVal",v=>v],shapeSize:["shapeSizeVal",v=>v+"%"],density:["densityVal",v=>v],gradientSoftness:["gradientSoftnessVal",v=>v+"%"],spacing:["spacingVal",v=>v+"%"],textAmount:["textAmountVal",v=>v+"%"]};Object.entries(map).forEach(([id,[oid,fn]])=>$(oid).textContent=fn($(id).value));$("collectionCount").textContent=$("posterCount").value;}
+  function render(){readControls();updateOutputs();const grid=$("posterGrid");grid.innerHTML="";const tpl=$("posterTemplate");for(let i=0;i<state.posterCount;i++){const node=tpl.content.firstElementChild.cloneNode(true),svg=makeSvg(i);node.querySelector(".poster-number").textContent=`DESIGN ${String(i+1).padStart(2,"0")}`;node.querySelector(".poster-mode").textContent=`OCEAN / ${String(i+1).padStart(2,"0")}`;node.querySelector(".poster-frame").innerHTML=svg;node.querySelector(".download-one").addEventListener("click",()=>download(`ali-studio-ocean-watercolor-${String(i+1).padStart(2,"0")}.svg`,svg));node.querySelector(".copy-one").addEventListener("click",()=>copyText(svg));grid.appendChild(node);}grid.style.gridTemplateColumns=`repeat(${Math.min(4,state.posterCount)},minmax(0,1fr))`;applyZoom();}
+  function applyZoom(){$("posterGrid").style.transform=`scale(${zoom})`;$("zoomLabel").textContent=`${Math.round(zoom*100)}%`;}
+  ["posterCount","shapeSize","density","gradientSoftness","spacing","textAmount","seed","format","quality","darkColor","lightColor"].forEach(id=>{$(id).addEventListener("input",()=>{updateOutputs();render();});$(id).addEventListener("change",()=>{updateOutputs();render();});});
+  $("regenerate").addEventListener("click",render);
+  $("randomize").addEventListener("click",()=>{$("seed").value=Math.floor(Math.random()*9999999)+1;$("shapeSize").value=75+Math.floor(Math.random()*50);$("density").value=5+Math.floor(Math.random()*10);$("gradientSoftness").value=45+Math.floor(Math.random()*50);$("spacing").value=10+Math.floor(Math.random()*46);updateOutputs();render();});
+  $("downloadAll").addEventListener("click",()=>download("ali-studio-ocean-watercolor-collection.svg",makeCombinedSvg()));
+  $("downloadJson").addEventListener("click",()=>download("ali-studio-ocean-watercolor-settings.json",JSON.stringify(state,null,2),"application/json"));
+  $("zoomIn").addEventListener("click",()=>{zoom=clamp(zoom+.1,.5,1.8);applyZoom();}); $("zoomOut").addEventListener("click",()=>{zoom=clamp(zoom-.1,.5,1.8);applyZoom();});
+  updateOutputs();render();
 })();
